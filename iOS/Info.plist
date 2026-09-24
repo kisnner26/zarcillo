@@ -28,6 +28,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Zarcillo busca tu Mac en la red Wi-Fi para controlarlo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Zarcillo guarda en Fotos el póster de la canción que estás escuchando.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

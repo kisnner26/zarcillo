@@ -22,6 +22,18 @@ final class Server: ObservableObject {
     private let musicQueue = DispatchQueue(label: "zarcillo.music")
     private var nowPlaying: NowPlaying?
     private var artworkSent: String?
+    private var artworkTrack: String?
+
+    /// Lo que la Touch Bar muestra por su cuenta.
+    var currentTrack: NowPlaying? { nowPlaying }
+    private(set) var currentArtwork: NSImage?
+    /// Las escenas que armaste en el iPhone; el Mac guarda una copia para la Touch Bar.
+    private(set) var routines: [Routine] = {
+        guard let d = UserDefaults.standard.data(forKey: "routines"),
+              let list = try? JSONDecoder().decode([Routine].self, from: d) else { return [] }
+        return list
+    }()
+    private var touchBar: TouchBarController?
     private var routineTask: Task<Void, Never>?
 
     private var listener: NWListener?
@@ -41,8 +53,12 @@ final class Server: ObservableObject {
             MainActor.assumeIsolated { self?.tick() }
         }
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pollMusic() }
+            MainActor.assumeIsolated {
+                self?.pollMusic()
+                if self?.touchBar?.isShowing == true { self?.touchBar?.refresh() }
+            }
         }
+        touchBar = TouchBarController(server: self)
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -254,7 +270,22 @@ final class Server: ObservableObject {
 
         case .power(let action):
             Power.perform(action)
+
+        case .syncRoutines(let list):
+            routines = list
+            UserDefaults.standard.set(try? JSONEncoder().encode(list), forKey: "routines")
+            touchBar?.refresh()
+
+        case .accent(let hex):
+            Accent.hex = hex
+            touchBar?.refresh()
         }
+    }
+
+    /// Una escena lanzada desde la Touch Bar.
+    func runFromMac(_ routine: Routine) {
+        hud.showMessage(routine.name, symbol: routine.symbol)
+        run(routine)
     }
 
     // MARK: Escenas
@@ -306,7 +337,7 @@ final class Server: ObservableObject {
     // MARK: Música
 
     private func pollMusic() {
-        guard !clients.isEmpty else { return }
+        guard !clients.isEmpty || touchBar?.isShowing == true else { return }
         musicQueue.async { [weak self] in
             let np = NowPlayingReader.read()
             DispatchQueue.main.async {
@@ -314,12 +345,18 @@ final class Server: ObservableObject {
                     guard let self else { return }
                     self.nowPlaying = np
                     self.broadcast(.nowPlaying(np))
-                    if let np, np.trackID != self.artworkSent {
+                    if np == nil { self.currentArtwork = nil; self.artworkTrack = nil }
+                    if let np, np.trackID != self.artworkSent || np.trackID != self.artworkTrack {
                         self.artworkSent = np.trackID
+                        self.artworkTrack = np.trackID
                         self.musicQueue.async {
                             guard let art = NowPlayingReader.artwork(for: np) else { return }
                             DispatchQueue.main.async {
-                                MainActor.assumeIsolated { self.broadcast(.artwork(trackID: np.trackID, data: art)) }
+                                MainActor.assumeIsolated {
+                                    self.currentArtwork = NSImage(data: art)
+                                    self.broadcast(.artwork(trackID: np.trackID, data: art))
+                                    self.touchBar?.refresh()
+                                }
                             }
                         }
                     }

@@ -60,7 +60,8 @@ final class HUD: ObservableObject {
     }
 }
 
-private let glow = Color(red: 0.28, green: 0.62, blue: 1.0)
+/// El acento que eligió el usuario en el iPhone.
+private var glow: Color { Color(nsColor: Accent.nsColor) }
 
 struct HUDView: View {
     @ObservedObject var hud: HUD

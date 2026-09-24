@@ -301,7 +301,11 @@ struct GesturePage: View {
 
     var body: some View {
         ZStack {
-            EdgeTicks()
+            // El área de deslizar: un marco punteado con aire alrededor.
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(Tone.ink.opacity(0.12), style: StrokeStyle(lineWidth: 1.5, dash: [4, 7]))
+                .padding(Space.m)
+                .allowsHitTesting(false)
             EdgeFlash(gesture: flashed)
                 .keyframeAnimator(initialValue: 0.0, trigger: burst) { v, o in v.opacity(o) } keyframes: { _ in
                     LinearKeyframe(1, duration: 0.07)
@@ -313,8 +317,8 @@ struct GesturePage: View {
             // La flecha sale disparada hacia donde va el escritorio.
             Image(systemName: flashed.symbol)
                 .font(.system(size: 64, weight: .semibold))
-                .foregroundStyle(.white)
-                .shadow(color: .white, radius: 12)
+                .foregroundStyle(Tone.ember)
+                .shadow(color: Tone.ember, radius: 14)
                 .keyframeAnimator(initialValue: FlyState(), trigger: burst) { v, f in
                     v.offset(x: flashed.direction.dx * f.travel, y: flashed.direction.dy * f.travel)
                         .scaleEffect(f.scale)
@@ -334,27 +338,29 @@ struct GesturePage: View {
                     }
                 }
                 .allowsHitTesting(false)
-            VStack(spacing: 12) {
+            VStack(spacing: Space.s) {
                 Image(systemName: shown?.symbol ?? "hand.draw")
-                    .font(.system(size: 46, weight: .light))
+                    .font(.system(size: 42, weight: .light))
+                    .foregroundStyle(shown == nil ? Tone.ink.opacity(0.8) : Tone.ember)
                 Text((shown?.label ?? "desliza").uppercased())
                     .font(.system(size: 12, weight: .bold))
                     .tracking(3)
+                    .foregroundStyle(Tone.ink.opacity(0.85))
+                if shown == nil {
+                    Text("doble toque · Spotlight")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Tone.ink.opacity(0.4))
+                        .padding(.top, 2)
+                }
             }
-            .foregroundStyle(Tone.ink.opacity(0.85))
             .id(shown)
             .transition(.scale(scale: 0.7).combined(with: .opacity))
 
-            VStack {
-                Spacer()
-                Text(landscape
-                     ? "← →  escritorios   ·   ↑  Mission Control   ·   ↓  ventanas de la app   ·   doble toque  Spotlight"
-                     : "← →  escritorios   ·   ↑  Mission Control\n↓  ventanas de la app   ·   doble toque  Spotlight")
-                    .font(.system(size: 11, weight: .medium))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Tone.ink.opacity(0.55))
-                    .padding(.bottom, landscape ? 16 : 22)
-            }
+            // Cada indicación vive en el borde hacia el que se desliza.
+            hint(.missionControl, "arrow.up", "Mission Control").frame(maxHeight: .infinity, alignment: .top)
+            hint(.appWindows, "arrow.down", "ventanas").frame(maxHeight: .infinity, alignment: .bottom)
+            hint(.spaceLeft, "arrow.left", "escritorio").frame(maxWidth: .infinity, alignment: .leading)
+            hint(.spaceRight, "arrow.right", "escritorio").frame(maxWidth: .infinity, alignment: .trailing)
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { fire(.spotlight) }
@@ -377,6 +383,24 @@ struct GesturePage: View {
                 }
             }
         )
+    }
+
+    /// Indicación de borde: se enciende con el color de acento al usarla.
+    private func hint(_ g: DesktopGesture, _ symbol: String, _ text: String) -> some View {
+        let lit = shown == g
+        let vertical = g == .missionControl || g == .appWindows
+        let layout = vertical ? AnyLayout(HStackLayout(spacing: 6)) : AnyLayout(VStackLayout(spacing: 4))
+        return layout {
+            Image(systemName: symbol).font(.system(size: 13, weight: .bold))
+            Text(text).font(.system(size: 12, weight: .semibold))
+        }
+        .foregroundStyle(lit ? Tone.ember : Tone.ink.opacity(0.45))
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Capsule().fill(lit ? Tone.ember.opacity(0.15) : Tone.key.opacity(0.6)))
+        .padding(Space.l)
+        .scaleEffect(lit ? 1.08 : 1)
+        .animation(.spring(duration: 0.35, bounce: 0.4), value: lit)
+        .allowsHitTesting(false)
     }
 
     private func fire(_ g: DesktopGesture) {

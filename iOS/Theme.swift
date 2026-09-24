@@ -52,7 +52,11 @@ final class Theme {
         self.hex = hex
         accent = Self.color(hex)
         UserDefaults.standard.set(Int(hex), forKey: "accent")
+        NotificationCenter.default.post(name: Theme.changed, object: nil)
     }
+
+    /// Avisa al resto (la conexión con el Mac) que cambió el color.
+    static let changed = Notification.Name("zarcillo.accent")
 
     static func color(_ hex: UInt32) -> Color {
         Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)

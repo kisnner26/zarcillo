@@ -59,13 +59,18 @@ final class Remote: ObservableObject {
         didSet { UserDefaults.standard.set(try? JSONEncoder().encode(shortcuts), forKey: "shortcuts") }
     }
     @Published var routines: [Routine] {
-        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(routines), forKey: "routines") }
+        didSet {
+            UserDefaults.standard.set(try? JSONEncoder().encode(routines), forKey: "routines")
+            send(.syncRoutines(routines))
+        }
     }
 
     @Published private(set) var nowPlaying: NowPlaying?
     /// Cuándo llegó `nowPlaying`: la barra de progreso avanza sola entre lecturas.
     @Published private(set) var nowPlayingAt = Date()
     @Published private(set) var artwork: UIImage?
+    /// Colores de la carátula actual, para el póster de música.
+    @Published private(set) var palette: ArtPalette?
     @Published private(set) var frame: UIImage?
     @Published private(set) var windows: [WindowInfo] = []
     @Published private(set) var canCapture = true
@@ -94,6 +99,10 @@ final class Remote: ObservableObject {
             routines = Routine.defaults
         }
         browse()
+        // El Mac pinta el HUD y la Touch Bar con el color que elijas aquí.
+        NotificationCenter.default.addObserver(forName: Theme.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.send(.accent(hex: Int(Theme.shared.hex))) }
+        }
     }
 
     var macName: String {
@@ -219,6 +228,8 @@ final class Remote: ObservableObject {
             phase = .connected(mac)
             UserDefaults.standard.set(mac, forKey: "lastMac")
             send(.hello(device: UIDevice.current.name))
+            send(.syncRoutines(routines))
+            send(.accent(hex: Int(Theme.shared.hex)))
         case .waiting(let error), .failed(let error):
             if case .tls = error, case .connecting = phase { wrongCode(mac); return }
             if case .failed = state { lost() }
@@ -293,11 +304,16 @@ final class Remote: ObservableObject {
             }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         case .nowPlaying(let np):
-            if np?.trackID != nowPlaying?.trackID { artwork = nil }
+            if np?.trackID != nowPlaying?.trackID { artwork = nil; palette = nil }
             nowPlaying = np
             nowPlayingAt = Date()
         case .artwork(let id, let data):
-            if id == nowPlaying?.trackID { artwork = UIImage(data: data) }
+            if id == nowPlaying?.trackID, let img = UIImage(data: data) {
+                withAnimation(.smooth(duration: 0.8)) {
+                    artwork = img
+                    palette = ArtPalette.from(img)
+                }
+            }
         case .frame(let data):
             frame = UIImage(data: data)
         case .windows(let list):

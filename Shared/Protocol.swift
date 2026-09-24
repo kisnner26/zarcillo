@@ -230,6 +230,9 @@ enum Command: Codable {
     // Escenas y energía
     case runRoutine(Routine)
     case power(PowerAction)
+    // Lo que el Mac muestra por su cuenta (Touch Bar, HUD): tus escenas y tu color.
+    case syncRoutines([Routine])
+    case accent(hex: Int)
 }
 
 /// Mac → iPhone.

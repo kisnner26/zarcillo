@@ -28,6 +28,7 @@ targets:
         NSLocalNetworkUsageDescription: Zarcillo busca tu Mac en la red Wi-Fi para controlarlo.
         NSBonjourServices: [_zarcillo._tcp]
         ITSAppUsesNonExemptEncryption: false
+        NSPhotoLibraryAddUsageDescription: Zarcillo guarda en Fotos el póster de la canción que estás escuchando.
     settings:
       base:
         # Cuenta gratuita: límite de 10 App IDs nuevos por semana. Se reutiliza

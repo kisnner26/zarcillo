@@ -181,7 +181,9 @@ struct Header: View {
         switch deck.mode {
         case .pad: return "Pad"
         case .apps: return selectedApp?.name ?? "Apps"
-        case .music: return remote.nowPlaying?.title ?? "Música"
+        case .music:
+            guard let np = remote.nowPlaying else { return "Música" }
+            return np.playing ? "Sonando" : "En pausa"
         case .screen: return "Pantalla"
         case .more:
             if let open = deck.moreOpen { return open.title.capitalized }
@@ -199,7 +201,7 @@ struct Header: View {
             return n == 1 ? "1 ventana · mantén para verla" : "\(n) ventanas · mantén para verlas"
         case .music:
             guard let np = remote.nowPlaying else { return "nada sonando" }
-            return "\(np.artist) · \(np.source)"
+            return "\(np.source) · compártelo con ↗"
         case .screen: return remote.canCapture ? "toca la imagen para hacer clic" : "falta permiso en el Mac"
         case .more:
             if deck.moreOpen != nil { return "toca la perilla para volver" }
@@ -875,116 +877,6 @@ struct ShortcutSheet: View {
     }
 }
 
-// MARK: - Música
-
-struct MusicStage: View {
-    @EnvironmentObject private var remote: Remote
-    @State private var scrub: Double?
-    @State private var taps = [0, 0]
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Spacer(minLength: 0)
-            ZStack {
-                // Disco que gira mientras suena.
-                Circle().fill(Tone.body)
-                Circle().stroke(Tone.stroke, lineWidth: 1)
-                ForEach(1..<4, id: \.self) { k in
-                    Circle().stroke(Tone.ink.opacity(0.06), lineWidth: 1).padding(CGFloat(k) * 14)
-                }
-                Group {
-                    if let art = remote.artwork {
-                        Image(uiImage: art).resizable().scaledToFill()
-                    } else {
-                        Image(systemName: "music.note").font(.system(size: 34)).foregroundStyle(Tone.ember)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity).background(Tone.key)
-                    }
-                }
-                .clipShape(Circle())
-                .padding(38)
-                Circle().fill(Tone.recess).frame(width: 14, height: 14)
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .frame(maxWidth: 230)
-            .modifier(Spin(on: remote.nowPlaying?.playing == true))
-
-            if let np = remote.nowPlaying {
-                TimelineView(.periodic(from: .now, by: 0.5)) { tl in
-                    let pos = scrub ?? remote.position(at: tl.date)
-                    VStack(spacing: 4) {
-                        GeometryReader { g in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Tone.key)
-                                Capsule().fill(Tone.ember)
-                                    .frame(width: max(6, g.size.width * (np.duration > 0 ? pos / np.duration : 0)))
-                            }
-                            .frame(height: 6).frame(maxHeight: .infinity)
-                            .contentShape(Rectangle())
-                            .gesture(DragGesture(minimumDistance: 0)
-                                .onChanged { v in scrub = max(0, min(1, v.location.x / g.size.width)) * np.duration }
-                                .onEnded { _ in
-                                    if let s = scrub { remote.send(.seek(seconds: s)) }
-                                    Haptic.tap()
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { scrub = nil }
-                                })
-                        }
-                        .frame(height: 20)
-                        HStack {
-                            Text(clock(pos))
-                            Spacer()
-                            Text("-" + clock(max(0, np.duration - pos)))
-                        }
-                        .font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(Tone.ink.opacity(0.5))
-                    }
-                }
-                .padding(.horizontal, 24)
-            }
-
-            HStack(spacing: 56) {
-                skip("backward.fill", .previous, 0)
-                skip("forward.fill", .next, 1)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 10)
-    }
-
-    private func skip(_ symbol: String, _ key: MediaKey, _ i: Int) -> some View {
-        Button {
-            Haptic.tap()
-            taps[i] += 1
-            remote.send(.media(key))
-        } label: {
-            Image(systemName: symbol).font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Tone.ink.opacity(0.85))
-                .symbolEffect(.bounce, value: taps[i])
-                .frame(width: 72, height: 52)
-                .background(Capsule().fill(Tone.key))
-                .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
-        }
-        .buttonStyle(PressScale())
-    }
-
-    private func clock(_ s: Double) -> String {
-        let t = Int(s.rounded())
-        return String(format: "%d:%02d", t / 60, t % 60)
-    }
-}
-
-/// Giro lento y continuo, como un disco.
-private struct Spin: ViewModifier {
-    let on: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduce
-
-    func body(content: Content) -> some View {
-        TimelineView(.animation(paused: !on || reduce)) { tl in
-            content.rotationEffect(.degrees(on && !reduce
-                ? tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 12) * 30 : 0))
-        }
-    }
-}
-
 // MARK: - Más: un tallo vertical
 
 struct MoreStage: View {
@@ -994,28 +886,41 @@ struct MoreStage: View {
     var body: some View {
         Group {
             if let open = deck.moreOpen {
-                VStack(spacing: 0) {
-                    HStack {
-                        Button {
-                            withAnimation(.spring(duration: 0.4)) { deck.moreOpen = nil }
-                        } label: {
-                            Label("más", systemImage: "chevron.left")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Tone.ink.opacity(0.8))
-                                .padding(.horizontal, Space.m)
-                                .frame(minHeight: 40)
-                                .background(Capsule().fill(Tone.key))
+                Group {
+                    if open == .routines || open == .shortcuts {
+                        // Estas tienen su propia barra de navegación: el botón va en una fila.
+                        VStack(spacing: 0) {
+                            HStack { backButton; Spacer() }.padding(Space.m)
+                            page(open).frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                        Spacer()
+                    } else {
+                        // El resto usa todo el escenario; volver flota en la esquina.
+                        page(open)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .overlay(alignment: .topLeading) { backButton.padding(Space.m) }
                     }
-                    .padding(Space.m)
-                    page(open).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 stem.transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
+    }
+
+    private var backButton: some View {
+        Button {
+            Haptic.tap()
+            withAnimation(.spring(duration: 0.4)) { deck.moreOpen = nil }
+        } label: {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Tone.ink.opacity(0.85))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(Tone.key))
+                .overlay(Circle().stroke(Tone.stroke, lineWidth: 1))
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel("volver a más")
     }
 
     private var stem: some View {
