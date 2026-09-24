@@ -11,6 +11,17 @@ import UIKit
 //
 // La perilla es el control universal: girar elige o ajusta, tocar ejecuta.
 
+/// Medidas compartidas. Todo lo que se toca mide al menos `tap`.
+enum Space {
+    static let xs: CGFloat = 6
+    static let s: CGFloat = 10
+    static let m: CGFloat = 16
+    static let l: CGFloat = 24
+    static let xl: CGFloat = 32
+    static let tap: CGFloat = 48
+    static let stageRadius: CGFloat = 32
+}
+
 enum DeckMode: Int, CaseIterable, Identifiable {
     case pad, apps, music, screen, more
     var id: Int { rawValue }
@@ -94,23 +105,26 @@ struct Instrument: View {
     var body: some View {
         Group {
             if landscape {
-                HStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: Space.m) {
+                    VStack(alignment: .leading, spacing: Space.s) {
                         Header()
                         Stage().frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .padding(.leading, 16).padding(.top, 10).padding(.bottom, 8)
-                    ControlDeck(ring: 104, knob: 100)
-                        .frame(width: 350)
+                    ControlDeck(ring: 100, knob: 100)
+                        .frame(width: 330)
                 }
+                .padding(.horizontal, Space.m).padding(.vertical, Space.s)
             } else {
                 VStack(spacing: 0) {
-                    Header().padding(.horizontal, 22).padding(.top, 20)
+                    Header()
+                        .padding(.horizontal, Space.l)
+                        .padding(.top, Space.s)
                     Stage()
-                        .padding(.horizontal, 14).padding(.top, 10)
+                        .padding(.horizontal, Space.m)
+                        .padding(.top, Space.m)
                         .frame(maxHeight: .infinity)
-                    ControlDeck(ring: 128, knob: 124)
-                        .frame(height: 372)
+                    ControlDeck(ring: 124, knob: 128)
+                        .frame(height: 360)
                 }
             }
         }
@@ -120,27 +134,40 @@ struct Instrument: View {
 
 // MARK: - Encabezado (Órbita)
 
-/// Lo elegido, en grande. Cambia con un fundido cada vez que la perilla se mueve.
+/// Lo elegido, en grande. Los avisos del Mac aparecen aquí mismo, en naranja,
+/// en vez de tapar la pantalla con una pastilla.
 struct Header: View {
     @EnvironmentObject private var remote: Remote
     @EnvironmentObject private var deck: Deck
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(size: 34, weight: .semibold, design: .rounded))
-                .foregroundStyle(Tone.ember)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .contentTransition(.interpolate)
-            Text(subtitle)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Tone.ink.opacity(0.55))
-                .lineLimit(1)
-                .contentTransition(.opacity)
+        HStack(alignment: .top, spacing: Space.m) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Tone.ember)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+                    .contentTransition(.interpolate)
+                HStack(spacing: 6) {
+                    if remote.pill != nil {
+                        Image(systemName: "sparkle").font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.ember)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                    Text(remote.pill ?? subtitle)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(remote.pill != nil ? Tone.ember : Tone.ink.opacity(0.55))
+                        .lineLimit(1)
+                        .contentTransition(.opacity)
+                }
+            }
+            Spacer(minLength: 0)
+            StatusLED()
+                .padding(.top, 12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.spring(duration: 0.35), value: title)
+        .animation(.spring(duration: 0.35), value: remote.pill)
     }
 
     private var selectedApp: AppTile? {
@@ -165,8 +192,8 @@ struct Header: View {
         case .apps:
             guard let app = selectedApp else { return "cargando el Dock…" }
             let n = remote.windows(of: app.id).count
-            if !app.running { return "cerrada · toca la perilla para abrirla" }
-            return n == 1 ? "1 ventana" : "\(n) ventanas"
+            if !app.running { return "cerrada · toca la perilla" }
+            return n == 1 ? "1 ventana · mantén para verla" : "\(n) ventanas · mantén para verlas"
         case .music:
             guard let np = remote.nowPlaying else { return "nada sonando" }
             return "\(np.artist) · \(np.source)"
@@ -178,17 +205,38 @@ struct Header: View {
     }
 }
 
+/// El piloto del aparato: verde si el Mac obedece, ámbar si falta un permiso.
+struct StatusLED: View {
+    @EnvironmentObject private var remote: Remote
+
+    var body: some View {
+        let color = remote.canControl ? Tone.leaf : Tone.ember
+        Button {
+            Haptic.tap()
+            remote.flash(remote.canControl ? "conectado a \(remote.macName)" : "falta el permiso de Accesibilidad en el Mac")
+        } label: {
+            Circle().fill(color)
+                .frame(width: 10, height: 10)
+                .shadow(color: color.opacity(0.9), radius: 6)
+                .phaseAnimator([1.0, 0.45]) { v, o in v.opacity(o) } animation: { _ in .easeInOut(duration: 1.4) }
+                .frame(width: Space.tap, height: Space.tap)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(remote.canControl ? "conectado" : "falta un permiso")
+    }
+}
+
 // MARK: - Escenario
 
-/// El hueco de la cerámica donde vive el contenido de cada modo.
+/// El hueco de la cerámica: más oscuro, con un borde que lo hunde.
 struct Stage: View {
     @EnvironmentObject private var deck: Deck
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Space.stageRadius, style: .continuous)
         ZStack {
-            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Tone.recess)
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(Tone.stroke, lineWidth: 1.2)
+            shape.fill(Tone.recess)
             Group {
                 switch deck.mode {
                 case .pad: PadStage()
@@ -201,8 +249,14 @@ struct Stage: View {
             .id(deck.mode)
             .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.97)),
                                     removal: .opacity))
+            // Sombra interior: oscuro arriba, un filo de luz abajo. Se lee hundido.
+            shape.strokeBorder(
+                LinearGradient(colors: [.black.opacity(0.7), Tone.stroke, Tone.ink.opacity(0.10)],
+                               startPoint: .top, endPoint: .bottom),
+                lineWidth: 1.5)
+                .allowsHitTesting(false)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .clipShape(shape)
         .animation(.spring(duration: 0.4, bounce: 0.2), value: deck.mode)
     }
 }
@@ -226,7 +280,6 @@ struct ControlDeck: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // Qué muestra la espiral: el volumen, o el brillo si está abierto.
     private var knobValue: Double {
         if deck.mode == .more, deck.moreOpen == .brightness { return remote.brightness ?? 0 }
         return remote.volume
@@ -243,19 +296,26 @@ struct ControlDeck: View {
         }
     }
 
-    private func tick(_ step: Int) {
+    /// Un paso de la perilla. Devuelve `false` si chocó con un tope.
+    private func tick(_ step: Int) -> Bool {
         switch deck.mode {
         case .pad, .music:
-            nudge(.volume, step)
+            return nudge(.volume, step)
         case .apps:
-            guard !remote.apps.isEmpty else { return }
-            deck.appIndex = min(remote.apps.count - 1, max(0, deck.appIndex + step))
+            guard !remote.apps.isEmpty else { return false }
+            let next = deck.appIndex + step
+            guard remote.apps.indices.contains(next) else { return false }
+            deck.appIndex = next
+            return true
         case .screen:
             remote.send(.scroll(dx: 0, dy: Double(-step) * 36))
+            return true
         case .more:
-            if deck.moreOpen == .brightness { nudge(.brightness, step); return }
-            guard deck.moreOpen == nil else { return }
-            deck.moreIndex = (deck.moreIndex + step + MoreItem.allCases.count) % MoreItem.allCases.count
+            if deck.moreOpen == .brightness { return nudge(.brightness, step) }
+            guard deck.moreOpen == nil else { return false }
+            let n = MoreItem.allCases.count
+            deck.moreIndex = (deck.moreIndex + step + n) % n
+            return true
         }
     }
 
@@ -276,10 +336,11 @@ struct ControlDeck: View {
         }
     }
 
-    /// Cada marca de la perilla es un 2 %; el valor final se confirma al soltar.
-    private func nudge(_ kind: LevelKind, _ step: Int) {
+    /// Cada marca es un 2 %; el valor final se confirma cuando la perilla se queda quieta.
+    private func nudge(_ kind: LevelKind, _ step: Int) -> Bool {
         let current = kind == .volume ? remote.volume : (remote.brightness ?? 0)
         let v = min(1, max(0, current + Double(step) * 0.02))
+        guard abs(v - current) > 0.0001 else { return false }
         remote.editingLevel = true
         remote.setLevel(kind, v, final: false)
         idle?.cancel()
@@ -289,150 +350,219 @@ struct ControlDeck: View {
         }
         idle = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+        return true
     }
 }
 
-/// Los modos orbitan la perilla. El elegido sube a la cima del anillo.
+/// Los modos orbitan la perilla. Solo el elegido muestra su nombre; los demás
+/// son botones redondos de icono, así el anillo respira.
 struct OrbitRing: View {
     @EnvironmentObject private var deck: Deck
     let radius: CGFloat
-    @State private var dragStart: Int?
 
     private var step: Double { 360.0 / Double(DeckMode.allCases.count) }
 
     var body: some View {
         ZStack {
-            Circle().stroke(Tone.stroke, lineWidth: 1).frame(width: radius * 2, height: radius * 2)
-            Circle().stroke(Tone.stroke.opacity(0.5), lineWidth: 1).frame(width: radius * 2 + 56, height: radius * 2 + 56)
+            Circle().stroke(Tone.stroke.opacity(0.9), lineWidth: 1)
+                .frame(width: radius * 2 + 48, height: radius * 2 + 48)
             ForEach(DeckMode.allCases) { m in
                 let angle = (Double(m.rawValue - deck.mode.rawValue) * step - 90) * .pi / 180
                 let selected = m == deck.mode
-                Button {
-                    select(m)
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: m.symbol).font(.system(size: selected ? 17 : 14, weight: .semibold))
-                        Text(m.label).font(.system(size: 11, weight: .semibold))
+                Button { select(m) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: m.symbol).font(.system(size: 16, weight: .semibold))
+                        if selected {
+                            Text(m.label).font(.system(size: 14, weight: .bold, design: .rounded))
+                                .transition(.scale.combined(with: .opacity))
+                        }
                     }
-                    .foregroundStyle(selected ? Tone.body : Tone.ink.opacity(0.6))
-                    .frame(width: 62, height: 50)
+                    .foregroundStyle(selected ? Tone.body : Tone.ink.opacity(0.7))
+                    .padding(.horizontal, selected ? 16 : 0)
+                    .frame(minWidth: Space.tap, minHeight: Space.tap)
                     .background(Capsule().fill(selected ? Tone.ember : Tone.key))
                     .overlay(Capsule().stroke(selected ? .clear : Tone.stroke, lineWidth: 1))
+                    .shadow(color: selected ? Tone.ember.opacity(0.45) : .clear, radius: 12)
                 }
                 .buttonStyle(PressScale())
-                .offset(x: cos(angle) * (radius + 26), y: sin(angle) * (radius + 26))
+                .accessibilityLabel(m.label)
+                .offset(x: cos(angle) * (radius + 24), y: sin(angle) * (radius + 24))
                 .animation(.spring(duration: 0.55, bounce: 0.25), value: deck.mode)
             }
         }
-        // Arrastrar en el anillo lo hace girar de a un modo.
-        .gesture(DragGesture(minimumDistance: 20).onEnded { v in
+        // Deslizar sobre el anillo lo gira de a un modo.
+        .gesture(DragGesture(minimumDistance: 24).onEnded { v in
             let dx = v.translation.width
-            guard abs(dx) > 30 else { return }
-            let next = (deck.mode.rawValue + (dx < 0 ? 1 : -1) + DeckMode.allCases.count) % DeckMode.allCases.count
-            select(DeckMode(rawValue: next)!)
+            guard abs(dx) > 36 else { return }
+            let n = DeckMode.allCases.count
+            select(DeckMode(rawValue: (deck.mode.rawValue + (dx < 0 ? 1 : -1) + n) % n)!)
         })
     }
 
     private func select(_ m: DeckMode) {
         guard m != deck.mode else { return }
-        UISelectionFeedbackGenerator().selectionChanged()
+        Detents.shared.detent(speed: 0.2)
         deck.moreOpen = nil
         deck.mode = m
     }
 }
 
 /// La perilla de Brasa con el zarcillo de Enredadera en la cara.
+///
+/// Gira con el dedo marca a marca (20 por vuelta), y si la lanzas sigue girando
+/// y frena sola. La luz no gira con ella: está pintada con un shader encima.
 struct Knob: View {
     let diameter: CGFloat
     let value: Double
     let caption: String
-    let onTick: (Int) -> Void
+    let onTick: (Int) -> Bool
     let onPress: () -> Void
 
-    @State private var angle: Double = 0        // giro visual acumulado (grados)
-    @State private var last: Double?
+    @State private var angle: Double = 0          // giro visual acumulado, en grados
+    @State private var last: (angle: Double, time: TimeInterval)?
+    @State private var velocity: Double = 0       // grados por segundo
     @State private var travel: Double = 0
     @State private var pressed = false
     @State private var presses = 0
-    private let detent = 18.0                   // 20 marcas por vuelta
-    private let selection = UISelectionFeedbackGenerator()
+    @State private var spin: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    private let detent = 18.0
+
+    private var base: CGFloat { diameter + 28 }
 
     var body: some View {
         ZStack {
-            // Base hundida
-            Circle().fill(Tone.key).frame(width: diameter + 26, height: diameter + 26)
-            Circle().stroke(Tone.stroke, lineWidth: 1).frame(width: diameter + 26, height: diameter + 26)
+            // Asiento hundido en la cerámica.
+            Circle().fill(Tone.recess).frame(width: base, height: base)
+            Circle().strokeBorder(
+                LinearGradient(colors: [.black.opacity(0.6), Tone.ink.opacity(0.12)], startPoint: .top, endPoint: .bottom),
+                lineWidth: 1.5)
+                .frame(width: base, height: base)
 
-            // Cuerpo naranja con estrías que giran con el dedo
+            // Cuerpo: estrías y zarcillo giran; la luz se queda quieta.
             ZStack {
                 Circle().fill(Tone.ember)
-                ForEach(0..<20, id: \.self) { i in
+                ForEach(0..<40, id: \.self) { i in
                     Capsule().fill(Tone.emberDeep)
-                        .frame(width: 3, height: i % 5 == 0 ? 14 : 8)
+                        .frame(width: i % 2 == 0 ? 3 : 2, height: i % 10 == 0 ? 16 : (i % 2 == 0 ? 10 : 6))
                         .offset(y: -diameter / 2 + 10)
-                        .rotationEffect(.degrees(Double(i) * 18))
+                        .rotationEffect(.degrees(Double(i) * 9))
                 }
                 Tendril(tightness: value)
-                    .stroke(Tone.body, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .frame(width: diameter * 0.62, height: diameter * 0.62)
+                    .stroke(Tone.body, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
+                    .frame(width: diameter * 0.6, height: diameter * 0.6)
             }
             .frame(width: diameter, height: diameter)
             .rotationEffect(.degrees(angle))
-            .scaleEffect(pressed ? 0.95 : 1)
-            .animation(.spring(duration: 0.25, bounce: 0.4), value: pressed)
+            // La luz va después del giro: la perilla rota "debajo" de ella,
+            // como un objeto real bajo una lámpara.
+            .overlay {
+                ZStack {
+                    RadialGradient(colors: [.white.opacity(0.42), .clear],
+                                   center: UnitPoint(x: 0.32, y: 0.26), startRadius: 0, endRadius: diameter * 0.45)
+                        .blendMode(.softLight)
+                    Circle().strokeBorder(
+                        LinearGradient(colors: [.white.opacity(0.35), .black.opacity(0.35)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 2)
+                    Circle().fill(Tone.ember.opacity(pressed ? 0.18 : 0)).blendMode(.plusLighter)
+                    Grain(opacity: 0.12).clipShape(Circle())
+                }
+                .clipShape(Circle())
+                .allowsHitTesting(false)
+            }
+            .shadow(color: Tone.ember.opacity(pressed ? 0.55 : 0.3), radius: pressed ? 26 : 16)
+            .scaleEffect(pressed ? 0.96 : 1)
+            .animation(.spring(duration: 0.25, bounce: 0.45), value: pressed)
             .animation(.easeOut(duration: 0.25), value: value)
 
-            // Lectura fija (no gira)
+            Ripple(trigger: presses, cornerRadius: diameter / 2, color: Tone.ember)
+                .frame(width: diameter, height: diameter)
+
+            // Lectura: una placa fija en el borde inferior del asiento.
             Text(caption)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Tone.ember)
-                .padding(.horizontal, 10).padding(.vertical, 5)
+                .padding(.horizontal, 12).padding(.vertical, 5)
                 .background(Capsule().fill(Tone.body))
-                .offset(y: diameter / 2 - 6)
+                .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
+                .offset(y: base / 2 - 2)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: caption)
-
-            Ripple(trigger: presses, cornerRadius: diameter / 2, color: Tone.ember)
-                .frame(width: diameter, height: diameter)
         }
+        .frame(width: base, height: base)
         .contentShape(Circle())
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { v in
-                    pressed = true
-                    let c = CGPoint(x: (diameter + 26) / 2, y: (diameter + 26) / 2)
+                    if !pressed { spin?.cancel(); pressed = true }
+                    let c = CGPoint(x: base / 2, y: base / 2)
                     let a = atan2(v.location.y - c.y, v.location.x - c.x) * 180 / .pi
+                    let now = v.time.timeIntervalSinceReferenceDate
                     if let l = last {
-                        var d = a - l
+                        var d = a - l.angle
                         if d > 180 { d -= 360 }
                         if d < -180 { d += 360 }
                         travel += abs(d)
-                        angle += d
-                        // Cada vez que se cruza una marca: un paso y un golpecito.
-                        let before = Int(((angle - d) / detent).rounded(.down))
-                        let after = Int((angle / detent).rounded(.down))
-                        if after != before {
-                            selection.selectionChanged()
-                            onTick(after > before ? 1 : -1)
-                        }
-                    } else {
-                        selection.prepare()
+                        let dt = max(now - l.time, 1.0 / 240)
+                        velocity = velocity * 0.6 + (d / dt) * 0.4
+                        _ = advance(by: d)
                     }
-                    last = a
+                    last = (a, now)
                 }
                 .onEnded { _ in
                     pressed = false
+                    last = nil
                     if travel < 8 {
                         presses += 1
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        Detents.shared.press()
                         onPress()
+                    } else if abs(velocity) > 260, !reduce {
+                        coast()
                     }
-                    last = nil
                     travel = 0
                 }
         )
-        .frame(width: diameter + 26, height: diameter + 26)
+        .accessibilityElement()
+        .accessibilityLabel("perilla")
+        .accessibilityValue(caption)
+        .accessibilityAdjustableAction { dir in
+            _ = onTick(dir == .increment ? 1 : -1)
+        }
+        .accessibilityAction { onPress() }
+    }
+
+    /// Gira `d` grados y dispara un paso por cada marca cruzada. Si un paso
+    /// choca con un tope, la perilla no sigue: se siente la pared.
+    private func advance(by d: Double) -> Bool {
+        let before = Int((angle / detent).rounded(.down))
+        let after = Int(((angle + d) / detent).rounded(.down))
+        guard after != before else { angle += d; return true }
+        let dir = after > before ? 1 : -1
+        for _ in 0..<abs(after - before) {
+            if !onTick(dir) {
+                Detents.shared.wall()
+                velocity = 0
+                return false
+            }
+            Detents.shared.detent(speed: abs(velocity) / 900)
+        }
+        angle += d
+        return true
+    }
+
+    /// Inercia: la perilla sigue girando y frena sola, marcando cada paso.
+    private func coast() {
+        spin?.cancel()
+        spin = Task { @MainActor in
+            while !Task.isCancelled, abs(velocity) > 50 {
+                try? await Task.sleep(for: .milliseconds(16))
+                velocity *= 0.93
+                if !advance(by: velocity / 60) { break }
+            }
+            velocity = 0
+        }
     }
 }
 
@@ -448,9 +578,8 @@ struct Tendril: Shape {
         let c = CGPoint(x: rect.midX, y: rect.midY)
         let r = min(rect.width, rect.height) / 2
         let turns = 0.6 + tightness * 2.4
-        let steps = 140
+        let steps = 160
         var p = Path()
-        // Tallo que entra desde abajo a la izquierda y se enrosca hacia el centro.
         let startAngle = Double.pi * 0.75
         for i in 0...steps {
             let t = Double(i) / Double(steps)
@@ -468,7 +597,7 @@ struct Tendril: Shape {
 struct VineApps: View {
     @EnvironmentObject private var remote: Remote
     @EnvironmentObject private var deck: Deck
-    private let spacing: CGFloat = 84
+    private let spacing: CGFloat = 104
 
     var body: some View {
         VStack(spacing: 0) {
@@ -503,7 +632,7 @@ struct VineApps: View {
             if remote.apps.isEmpty {
                 ProgressView().tint(Tone.ember).padding(.bottom, 40)
             }
-            RoutineStrip().padding(.bottom, 6)
+            RoutineStrip().padding(.bottom, Space.s)
         }
         .task {
             while !Task.isCancelled {
@@ -607,74 +736,113 @@ struct Bud: View {
 struct PadStage: View {
     @EnvironmentObject private var remote: Remote
     @State private var typing = false
-    @State private var bumps = [0, 0, 0, 0, 0]
+    @State private var shortcuts = false
+    @State private var bumps = [0, 0, 0, 0]
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Space.m) {
             ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.body.opacity(0.6))
-                Circle().fill(Tone.ember).frame(width: 6, height: 6).opacity(0.7)
+                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Tone.body.opacity(0.55))
+                Circle().fill(Tone.ember).frame(width: 6, height: 6).opacity(0.6)
                 Trackpad(remote: remote)
             }
-            .padding([.horizontal, .top], 10)
 
-            HStack(spacing: 8) {
+            // Cuatro teclas grabadas, con aire entre ellas.
+            HStack(spacing: Space.s + 2) {
                 key("keyboard", "teclado", 0) { withAnimation(.spring(duration: 0.4, bounce: 0.25)) { typing = true } }
-                key("arrow.up.doc.on.clipboard", "al Mac", 1) { remote.pushClipboard() }
-                key("arrow.down.doc.on.clipboard", "del Mac", 2) { remote.send(.pullClipboard) }
-                key("cursorarrow.click", "clic", 3) { remote.send(.click(button: .left)) }
-                key("cursorarrow.click.2", "derecho", 4) { remote.send(.click(button: .right)) }
-            }
-            .padding(.horizontal, 10)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
-                    ForEach(remote.shortcuts) { s in
-                        Button {
-                            Haptic.tap()
-                            remote.send(.shortcut(s))
-                        } label: {
-                            Text(s.glyphs)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Tone.ink.opacity(0.85))
-                                .padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(Capsule().fill(Tone.key))
-                                .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
-                        }
-                        .buttonStyle(PressScale())
-                        .accessibilityLabel(s.title)
-                    }
+                key("command", "atajos", 1) { shortcuts = true }
+                Menu {
+                    Button { remote.pushClipboard() } label: { Label("Enviar al Mac", systemImage: "arrow.up.doc.on.clipboard") }
+                    Button { remote.send(.pullClipboard) } label: { Label("Traer del Mac", systemImage: "arrow.down.doc.on.clipboard") }
+                } label: {
+                    keyFace("doc.on.clipboard", "portapapeles", 2)
                 }
-                .padding(.horizontal, 10)
+                .simultaneousGesture(TapGesture().onEnded { Haptic.tap(); bumps[2] += 1 })
+                key("cursorarrow.click.2", "clic der.", 3) { remote.send(.click(button: .right)) }
             }
-            .scrollIndicators(.hidden)
-            .padding(.bottom, 10)
         }
+        .padding(Space.m)
         .overlay(alignment: .bottom) {
             if typing {
                 KeyboardBar(shown: $typing).transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .sheet(isPresented: $shortcuts) {
+            ShortcutSheet().environmentObject(remote)
+        }
     }
 
-    /// Tecla grabada en la cerámica.
     private func key(_ symbol: String, _ title: String, _ i: Int, action: @escaping () -> Void) -> some View {
         Button {
             Haptic.tap()
             bumps[i] += 1
             action()
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: symbol).font(.system(size: 16, weight: .semibold))
-                    .symbolEffect(.bounce, value: bumps[i])
-                Text(title).font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(Tone.ink.opacity(0.8))
-            .frame(maxWidth: .infinity).frame(height: 50)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Tone.key))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Tone.stroke, lineWidth: 1))
-        }
+        } label: { keyFace(symbol, title, i) }
         .buttonStyle(PressScale())
+    }
+
+    /// Tecla grabada en la cerámica.
+    private func keyFace(_ symbol: String, _ title: String, _ i: Int) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
+                .symbolEffect(.bounce, value: bumps[i])
+            Text(title).font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .foregroundStyle(Tone.ink.opacity(0.85))
+        .frame(maxWidth: .infinity).frame(height: 62)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(LinearGradient(colors: [Tone.ink.opacity(0.14), .black.opacity(0.5)],
+                                         startPoint: .top, endPoint: .bottom), lineWidth: 1))
+    }
+}
+
+/// Los atajos, en grande y con aire: una hoja que sube desde abajo.
+struct ShortcutSheet: View {
+    @EnvironmentObject private var remote: Remote
+    @State private var editing = false
+    @State private var taps: [UUID: Int] = [:]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: Space.s + 2)], spacing: Space.s + 2) {
+                    ForEach(remote.shortcuts) { s in
+                        Button {
+                            Detents.shared.press()
+                            taps[s.id, default: 0] += 1
+                            remote.send(.shortcut(s))
+                        } label: {
+                            VStack(spacing: 6) {
+                                Text(s.glyphs).font(.system(size: 22, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(Tone.ember)
+                                Text(s.title).font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Tone.ink.opacity(0.7)).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity).frame(height: 88)
+                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Tone.stroke, lineWidth: 1))
+                            .boing(taps[s.id, default: 0], amount: 0.08)
+                        }
+                        .buttonStyle(PressScale())
+                    }
+                }
+                .padding(Space.m)
+            }
+            .navigationTitle("Atajos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink("Editar") { ShortcutEditorPage() }
+                }
+            }
+            .background(Tone.body)
+        }
+        .tint(Tone.ember)
+        .presentationDetents([.medium, .large])
+        .presentationBackground(Tone.body)
+        .presentationCornerRadius(32)
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -744,7 +912,7 @@ struct MusicStage: View {
                 .padding(.horizontal, 24)
             }
 
-            HStack(spacing: 40) {
+            HStack(spacing: 56) {
                 skip("backward.fill", .previous, 0)
                 skip("forward.fill", .next, 1)
             }
@@ -762,7 +930,7 @@ struct MusicStage: View {
             Image(systemName: symbol).font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Tone.ink.opacity(0.85))
                 .symbolEffect(.bounce, value: taps[i])
-                .frame(width: 58, height: 44)
+                .frame(width: 72, height: 52)
                 .background(Capsule().fill(Tone.key))
                 .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
         }
@@ -805,12 +973,13 @@ struct MoreStage: View {
                             Label("más", systemImage: "chevron.left")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Tone.ink.opacity(0.8))
-                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .padding(.horizontal, Space.m)
+                                .frame(minHeight: 40)
                                 .background(Capsule().fill(Tone.key))
                         }
                         Spacer()
                     }
-                    .padding(10)
+                    .padding(Space.m)
                     page(open).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -834,12 +1003,12 @@ struct MoreStage: View {
                             ZStack {
                                 // El tallo pasa por detrás de cada nudo.
                                 Rectangle().fill(Tone.ink.opacity(0.2)).frame(width: 3)
-                                Circle().fill(selected ? Tone.ember : Tone.key).frame(width: 40, height: 40)
+                                Circle().fill(selected ? Tone.ember : Tone.key).frame(width: 44, height: 44)
                                     .overlay(Circle().stroke(Tone.stroke, lineWidth: selected ? 0 : 1))
                                 Image(systemName: item.symbol).font(.system(size: 16, weight: .semibold))
                                     .foregroundStyle(selected ? Tone.body : Tone.ink.opacity(0.75))
                             }
-                            .frame(width: 40, height: 62)
+                            .frame(width: 44, height: 68)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.title).font(.system(size: 17, weight: .semibold, design: .rounded))
                                     .foregroundStyle(selected ? Tone.ember : Tone.ink)
@@ -853,7 +1022,7 @@ struct MoreStage: View {
                     .animation(.spring(duration: 0.3), value: selected)
                 }
             }
-            .padding(.horizontal, 22).padding(.vertical, 12)
+            .padding(.horizontal, Space.l).padding(.vertical, Space.m)
         }
         .scrollIndicators(.hidden)
     }

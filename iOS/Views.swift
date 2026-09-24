@@ -25,19 +25,56 @@ struct Glow: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
 
     var body: some View {
-        // La cerámica, con el calor de la brasa subiendo desde abajo. Respira
-        // despacio: 20 cuadros por segundo alcanzan.
+        // Cerámica oscura con el calor de la brasa subiendo desde abajo. Los
+        // puntos de la malla derivan despacio: 20 cuadros por segundo alcanzan.
         TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
-            let t = reduce ? 0 : tl.date.timeIntervalSinceReferenceDate
-            ZStack {
-                Tone.body
-                RadialGradient(colors: [Tone.ember.opacity(0.20 + 0.05 * sin(t * 0.8)), .clear],
-                               center: UnitPoint(x: 0.5, y: 1.0), startRadius: 0, endRadius: 520)
-                RadialGradient(colors: [Tone.ember.opacity(0.06), .clear],
-                               center: UnitPoint(x: 0.1 + 0.05 * sin(t * 0.2), y: 0.05), startRadius: 0, endRadius: 360)
+            let t = Float(reduce ? 0 : tl.date.timeIntervalSinceReferenceDate)
+            let warm = Tone.ember.opacity(0.34 + 0.05 * Double(sin(t * 0.7)))
+            MeshGradient(
+                width: 3, height: 3,
+                points: [
+                    [0, 0], [0.5, 0], [1, 0],
+                    [0, 0.55 + 0.03 * sin(t * 0.3)], [0.5 + 0.06 * sin(t * 0.25), 0.62], [1, 0.55 + 0.03 * cos(t * 0.3)],
+                    [0, 1], [0.5, 1], [1, 1],
+                ],
+                colors: [
+                    Tone.body, Tone.body, Tone.body,
+                    Tone.body, Tone.body.mix(with: Tone.ember, by: 0.05), Tone.body,
+                    Tone.body.mix(with: Tone.ember, by: 0.12), warm, Tone.body.mix(with: Tone.ember, by: 0.12),
+                ]
+            )
+        }
+        .overlay(Grain(opacity: 0.07))
+        .ignoresSafeArea()
+    }
+}
+
+/// Grano de cerámica: una baldosa de ruido que se genera una sola vez y se
+/// repite. Sin él las superficies oscuras se ven planas, como plástico.
+struct Grain: View {
+    var opacity: Double
+
+    private static let tile: UIImage = {
+        let side = 96
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
+        return renderer.image { ctx in
+            var rng = SystemRandomNumberGenerator()
+            for y in 0..<side {
+                for x in 0..<side {
+                    let v = CGFloat(Double(rng.next() % 1000) / 1000)
+                    ctx.cgContext.setFillColor(UIColor(white: v, alpha: 1).cgColor)
+                    ctx.cgContext.fill(CGRect(x: x, y: y, width: 1, height: 1))
+                }
             }
         }
-        .ignoresSafeArea()
+    }()
+
+    var body: some View {
+        Image(uiImage: Self.tile)
+            .resizable(resizingMode: .tile)
+            .blendMode(.overlay)
+            .opacity(opacity)
+            .allowsHitTesting(false)
     }
 }
 
@@ -105,37 +142,6 @@ struct RootView: View {
             }
         }
         .animation(.spring(duration: 0.5, bounce: 0.25), value: remote.phase)
-        .overlay(alignment: .top) { StatusPill() }
-    }
-}
-
-/// La pastilla negra de arriba: con qué Mac se habla, o lo último que pasó.
-struct StatusPill: View {
-    @EnvironmentObject private var remote: Remote
-
-    var body: some View {
-        let connected: Bool = { if case .connected = remote.phase { true } else { false } }()
-        if connected || remote.pill != nil {
-            HStack(spacing: 6) {
-                if remote.pill == nil {
-                    Circle().fill(remote.canControl ? Color.green : Color.orange).frame(width: 6, height: 6)
-                        .phaseAnimator([1.0, 0.35]) { v, o in v.opacity(o) } animation: { _ in .easeInOut(duration: 1.2) }
-                } else {
-                    Image(systemName: "sparkle").font(.system(size: 10, weight: .bold)).foregroundStyle(Tone.peach)
-                        .transition(.scale.combined(with: .opacity))
-                }
-                Text(remote.pill ?? remote.macName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .contentTransition(.opacity)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 7)
-            .background(Capsule().fill(Tone.key).shadow(color: .black.opacity(0.25), radius: 8, y: 3))
-            .padding(.top, 6)
-            .transition(.scale(scale: 0.6, anchor: .top).combined(with: .opacity))
-            .animation(.spring(duration: 0.45, bounce: 0.35), value: remote.pill)
-        }
     }
 }
 

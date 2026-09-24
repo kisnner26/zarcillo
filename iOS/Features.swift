@@ -225,7 +225,7 @@ struct RoutineStrip: View {
 
     var body: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 ForEach(remote.routines) { r in
                     Button {
                         Haptic.thump()
@@ -236,8 +236,10 @@ struct RoutineStrip: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
                             .symbolEffect(.bounce, value: taps[r.id, default: 0])
-                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            .padding(.horizontal, 18)
+                            .frame(minHeight: 46)
                             .background(Capsule().fill(Tone.key))
+                            .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
                             .overlay {
                                 Capsule().stroke(.white, lineWidth: 2)
                                     .keyframeAnimator(initialValue: RippleState(), trigger: taps[r.id, default: 0]) { v, s in
@@ -252,7 +254,7 @@ struct RoutineStrip: View {
                     .buttonStyle(PressScale())
                 }
             }
-            .padding(.horizontal, 20).padding(.vertical, 8)
+            .padding(.horizontal, 16).padding(.vertical, 8)
         }
         .scrollIndicators(.hidden)
     }
