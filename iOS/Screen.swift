@@ -105,8 +105,6 @@ struct FullScreenMac: View {
             Orientation.request(.allButUpsideDown)
         }
     }
-
-    }
 }
 
 /// La imagen en vivo, con toque = clic y mantener = clic derecho. Si es
