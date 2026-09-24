@@ -467,7 +467,7 @@ struct PadPage: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Tone.ink.opacity(0.1))
                 RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(Tone.ink.opacity(0.2), lineWidth: 1)
-                Text("un dedo mueve · toque = clic\ndos dedos desplazan · toque con dos = clic derecho\nmantén para arrastrar")
+                Text("un dedo mueve · toque = clic · dos toques = doble clic\ndos dedos desplazan · toque con dos a la vez = clic derecho\ntoca y arrastra, o mantén, para arrastrar")
                     .font(.system(size: 11, weight: .medium))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Tone.ink.opacity(0.4))
@@ -475,6 +475,13 @@ struct PadPage: View {
                 Trackpad(remote: remote)
             }
             .padding(.top, 52)
+
+            // Botones de clic, como los de un portátil: para cuando un toque no es cómodo.
+            HStack(spacing: 2) {
+                clickButton("clic", .left)
+                clickButton("clic derecho", .right)
+            }
+            .clipShape(Capsule())
 
             HStack(spacing: 18) {
                 media("backward.fill", .previous)
@@ -514,6 +521,21 @@ struct PadPage: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .sheet(isPresented: $editing) { ShortcutEditor().environmentObject(remote) }
+    }
+
+    private func clickButton(_ title: String, _ button: MouseButton) -> some View {
+        Button {
+            Haptic.tap()
+            remote.send(.click(button: button))
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color.black.opacity(0.82))
+        }
+        .buttonStyle(PressScale())
     }
 
     private func media(_ symbol: String, _ key: MediaKey) -> some View {
@@ -559,13 +581,25 @@ final class TrackpadSurface: UIView {
     var onClick: ((MouseButton) -> Void)?
     var onPress: ((Bool) -> Void)?
 
-    private var startTime = Date.distantPast
-    private var maxFingers = 0
+    /// Dedos apoyados EN ESTA VISTA, con su última posición. No se usa
+    /// `event.allTouches`: incluye toques de otras vistas y toques viejos que
+    /// el sistema aún no dio por terminados, y un solo dedo se leía como dos.
+    private var active: [UITouch: CGPoint] = [:]
+    private var firstDown = Date.distantPast
+    /// Dedos que tocaron casi a la vez (en 0,2 s). Un segundo dedo que llega
+    /// tarde no convierte el toque en clic derecho.
+    private var together = 0
     private var travel: CGFloat = 0
-    private var last: CGPoint?
-    private var lastCount = 0
+    private var scrolled = false
     private var holdTimer: Timer?
     private var dragging = false
+    private var lastTap = Date.distantPast
+    private var tapDragArmed = false
+
+    private var velocity = CGVector.zero
+    private var lastScrollAt = CACurrentMediaTime()
+    private var momentum: CADisplayLink?
+
     private let tapHaptic = UIImpactFeedbackGenerator(style: .light)
     private let holdHaptic = UIImpactFeedbackGenerator(style: .rigid)
 
@@ -577,72 +611,114 @@ final class TrackpadSurface: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Centro de los dedos que siguen apoyados.
-    private func centroid(_ event: UIEvent?, excluding gone: Set<UITouch> = []) -> (CGPoint, Int) {
-        let live = (event?.allTouches ?? []).filter {
-            !gone.contains($0) && $0.phase != .ended && $0.phase != .cancelled
-        }
-        guard !live.isEmpty else { return (.zero, 0) }
-        let sum = live.reduce(CGPoint.zero) { acc, t in
-            let p = t.location(in: self)
-            return CGPoint(x: acc.x + p.x, y: acc.y + p.y)
-        }
-        return (CGPoint(x: sum.x / CGFloat(live.count), y: sum.y / CGFloat(live.count)), live.count)
-    }
-
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        let (c, n) = centroid(event)
-        if maxFingers == 0 {
-            startTime = Date()
+        stopMomentum()
+        if active.isEmpty {
+            firstDown = Date()
+            together = 0
             travel = 0
+            scrolled = false
+            // Tocar justo después de un toque y mover = arrastrar, como en el trackpad del Mac.
+            tapDragArmed = Date().timeIntervalSince(lastTap) < 0.3
             holdTimer?.invalidate()
-            holdTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: false) { [weak self] _ in
-                guard let self, self.travel < 6, self.maxFingers == 1 else { return }
+            holdTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                guard let self, self.active.count == 1, self.travel < 8, !self.dragging else { return }
                 self.dragging = true
                 self.holdHaptic.impactOccurred()
                 self.onPress?(true)
             }
         }
-        maxFingers = max(maxFingers, n)
-        if n > 1 { holdTimer?.invalidate() }
-        last = c
-        lastCount = n
+        for t in touches { active[t] = t.location(in: self) }
+        if Date().timeIntervalSince(firstDown) < 0.2 { together = max(together, active.count) }
+        if active.count > 1 { holdTimer?.invalidate() }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        let (c, n) = centroid(event)
+        var dx: CGFloat = 0, dy: CGFloat = 0, n: CGFloat = 0
+        for t in touches {
+            guard let prev = active[t] else { continue }
+            let p = t.location(in: self)
+            dx += p.x - prev.x
+            dy += p.y - prev.y
+            active[t] = p
+            n += 1
+        }
         guard n > 0 else { return }
-        // Si cambia la cantidad de dedos, el centro salta: se toma como nuevo punto de partida.
-        guard let prev = last, n == lastCount else { last = c; lastCount = n; return }
-        let dx = c.x - prev.x, dy = c.y - prev.y
+        dx /= n
+        dy /= n
         travel += hypot(dx, dy)
-        if travel > 6, !dragging { holdTimer?.invalidate() }
-        if n >= 2 { onScroll?(dx, dy) } else { onMove?(dx, dy) }
-        last = c
+        if travel > 8, !dragging { holdTimer?.invalidate() }
+
+        if active.count >= 2, !dragging {
+            scrolled = true
+            let now = CACurrentMediaTime()
+            let dt = max(now - lastScrollAt, 1.0 / 240)
+            lastScrollAt = now
+            // Velocidad suavizada para la inercia al soltar.
+            velocity = CGVector(dx: velocity.dx * 0.6 + dx / dt * 0.4, dy: velocity.dy * 0.6 + dy / dt * 0.4)
+            onScroll?(dx, dy)
+        } else {
+            if tapDragArmed, !dragging, travel > 4 {
+                dragging = true
+                holdHaptic.impactOccurred()
+                onPress?(true)
+            }
+            onMove?(dx, dy)
+        }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        finish(touches, event)
+        finish(touches)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        finish(touches, event)
+        finish(touches)
     }
 
-    private func finish(_ touches: Set<UITouch>, _ event: UIEvent?) {
-        let (c, n) = centroid(event, excluding: touches)
-        guard n == 0 else { last = c; lastCount = n; return }
+    private func finish(_ touches: Set<UITouch>) {
+        for t in touches { active[t] = nil }
+        guard active.isEmpty else { return }
         holdTimer?.invalidate()
+
+        let quick = Date().timeIntervalSince(firstDown) < 0.28 && travel < 10
         if dragging {
             dragging = false
             onPress?(false)
-        } else if travel < 10, Date().timeIntervalSince(startTime) < 0.3 {
+        } else if quick {
             tapHaptic.impactOccurred()
-            onClick?(maxFingers >= 2 ? .right : .left)
+            if together >= 2 {
+                onClick?(.right)
+            } else {
+                onClick?(.left)
+                lastTap = Date()
+            }
+        } else if scrolled, CACurrentMediaTime() - lastScrollAt < 0.08 {
+            startMomentum()
         }
-        maxFingers = 0
-        last = nil
-        lastCount = 0
+        tapDragArmed = false
+    }
+
+    // MARK: Inercia del desplazamiento
+
+    private func startMomentum() {
+        guard hypot(velocity.dx, velocity.dy) > 150 else { velocity = .zero; return }
+        let link = CADisplayLink(target: self, selector: #selector(glide(_:)))
+        link.add(to: .main, forMode: .common)
+        momentum = link
+    }
+
+    @objc private func glide(_ link: CADisplayLink) {
+        let dt = link.targetTimestamp - link.timestamp
+        onScroll?(velocity.dx * dt, velocity.dy * dt)
+        let decay = pow(0.05, dt)   // pierde ~95 % de la velocidad por segundo
+        velocity = CGVector(dx: velocity.dx * decay, dy: velocity.dy * decay)
+        if hypot(velocity.dx, velocity.dy) < 20 { stopMomentum() }
+    }
+
+    private func stopMomentum() {
+        momentum?.invalidate()
+        momentum = nil
+        velocity = .zero
     }
 }
 
