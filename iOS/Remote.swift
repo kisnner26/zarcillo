@@ -76,6 +76,9 @@ final class Remote: ObservableObject {
     @Published private(set) var canCapture = true
     @Published private(set) var hasTouchBar = false
     @Published var touchBar = TouchBarConfig.standard
+    @Published private(set) var lights: [LightInfo] = []
+    @Published var lightsAmbient = false
+    @Published var lightsBrightness = 0.8
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
     private var pendingMove = CGVector.zero
@@ -337,6 +340,10 @@ final class Remote: ObservableObject {
             hasTouchBar = bar
         case .touchBarConfig(let config):
             touchBar = config
+        case .lights(let devices, let ambient, let brightness):
+            lights = devices
+            lightsAmbient = ambient
+            lightsBrightness = brightness
         }
     }
 

@@ -48,12 +48,13 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case photos, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
+    case photos, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .photos: "fotos"
+        case .lights: "luces"
         case .brightness: "brillo"
         case .color: "color"
         case .touchBar: "touch bar"
@@ -68,6 +69,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .photos: "tíralas al Mac como hojas"
+        case .lights: "siguen los colores de la pantalla"
         case .brightness: "gira la perilla"
         case .color: "el acento de la app"
         case .touchBar: "elige qué muestra en el Mac"
@@ -82,6 +84,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .photos: "photo.on.rectangle.angled"
+        case .lights: "lightbulb.2"
         case .brightness: "sun.max"
         case .color: "paintpalette"
         case .touchBar: "rectangle.split.3x1"
@@ -922,6 +925,7 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .photos: TossPage()
+        case .lights: LightsPage()
         case .color: ColorPage()
         case .touchBar: TouchBarPage()
         case .gestures: GesturePage()

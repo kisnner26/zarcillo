@@ -239,6 +239,12 @@ enum Command: Codable {
     // Touch Bar del Mac, manejada desde el iPhone.
     case touchBar(TouchBarConfig)
     case touchBarShow(Bool)
+    // Luces que siguen a la pantalla del Mac.
+    case lightsScan
+    case lightsAmbient(Bool)
+    case lightsBrightness(Double)
+    case lightZone(id: String, zone: LightZone)
+    case lightIdentify(id: String)
 }
 
 /// Mac → iPhone.
@@ -256,6 +262,29 @@ enum Event: Codable {
     case windows([WindowInfo])
     case capabilities(touchBar: Bool)
     case touchBarConfig(TouchBarConfig)
+    case lights(devices: [LightInfo], ambient: Bool, brightness: Double)
+}
+
+/// Qué parte de la pantalla sigue cada foco.
+enum LightZone: String, Codable, CaseIterable {
+    case all, left, center, right
+
+    var label: String {
+        switch self {
+        case .all: "toda"
+        case .left: "izquierda"
+        case .center: "centro"
+        case .right: "derecha"
+        }
+    }
+}
+
+/// Un foco encontrado en la red local.
+struct LightInfo: Codable, Hashable, Identifiable {
+    var id: String       // identificador del fabricante
+    var sku: String      // modelo, p. ej. H6008
+    var ip: String
+    var zone: LightZone
 }
 
 /// Qué muestra la Touch Bar de Zarcillo en el Mac y en qué orden.

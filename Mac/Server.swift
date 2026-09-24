@@ -17,6 +17,7 @@ final class Server: ObservableObject {
     let hud = HUD()
     let laser = Laser()
     let photos = PhotoDrop()
+    let lights = Lights()
     let macName = Host.current().localizedName ?? "Mac"
 
     /// Clientes que están mirando la pantalla en vivo.
@@ -67,6 +68,7 @@ final class Server: ObservableObject {
             }
         }
         touchBar = TouchBarController(server: self)
+        lights.onChange = { [weak self] in self?.broadcastLights() }
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -193,6 +195,7 @@ final class Server: ObservableObject {
             reply(key, .nowPlaying(nowPlaying))
             reply(key, .capabilities(touchBar: TouchBarController.hasTouchBar))
             reply(key, .touchBarConfig(TouchBarController.config))
+            reply(key, .lights(devices: lights.devices, ambient: lights.ambient, brightness: lights.brightness))
             artworkSent = nil
             hud.showMessage("\(device) conectado", symbol: "iphone")
 
@@ -314,10 +317,26 @@ final class Server: ObservableObject {
         case .touchBarShow(let show):
             touchBar?.setShown(show)
 
+        case .lightsScan:
+            lights.scan()
+        case .lightsAmbient(let on):
+            lights.setAmbient(on)
+            hud.showMessage(on ? "luces siguiendo la pantalla" : "luces en pausa", symbol: "lightbulb.fill")
+        case .lightsBrightness(let v):
+            lights.setBrightness(v)
+        case .lightZone(let id, let zone):
+            lights.setZone(zone, for: id)
+        case .lightIdentify(let id):
+            lights.identify(id)
+
         case .photo(let data):
             photos.receive(data)
             reply(key, .status("foto recibida en el Mac"))
         }
+    }
+
+    private func broadcastLights() {
+        broadcast(.lights(devices: lights.devices, ambient: lights.ambient, brightness: lights.brightness))
     }
 
     /// Una escena lanzada desde la Touch Bar.
