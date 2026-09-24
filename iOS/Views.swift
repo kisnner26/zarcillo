@@ -129,9 +129,12 @@ enum Haptic {
 
 // MARK: - Raíz
 
-/// En un iPhone, horizontal = altura compacta.
+/// Horizontal = la ventana es más ancha que alta. Se mide el tamaño real y no
+/// la clase de tamaño: en la Duplicación del iPhone la ventana puede estar
+/// acostada con la clase de tamaño todavía "regular".
 extension EnvironmentValues {
-    var isLandscape: Bool { verticalSizeClass == .compact }
+    @Entry var measuredLandscape: Bool? = nil
+    var isLandscape: Bool { measuredLandscape ?? (verticalSizeClass == .compact) }
 }
 
 struct RootView: View {
@@ -144,8 +147,12 @@ struct RootView: View {
     @AppStorage("app.orientation") private var orientation: AppOrientation = .auto
 
     var body: some View {
-        ForceLandscape(enabled: orientation == .landscape) { root }
-            .background(Tone.body.ignoresSafeArea())
+        ForceLandscape(enabled: orientation == .landscape) {
+            GeometryReader { g in
+                root.environment(\.measuredLandscape, g.size.width > g.size.height * 1.05)
+            }
+        }
+        .background(Tone.body.ignoresSafeArea())
     }
 
     private var root: some View {

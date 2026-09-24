@@ -449,6 +449,7 @@ struct ForceLandscape<Content: View>: View {
             let turn = enabled && OrientationState.shared.refused && g.size.height > g.size.width
             content()
                 .transformEnvironment(\.verticalSizeClass) { if turn { $0 = .compact } }
+                .transformEnvironment(\.measuredLandscape) { if turn { $0 = true } }
                 .frame(width: turn ? g.size.height : g.size.width, height: turn ? g.size.width : g.size.height)
                 .rotationEffect(.degrees(turn ? 90 : 0))
                 .position(x: g.size.width / 2, y: g.size.height / 2)
@@ -484,8 +485,14 @@ enum Orientation {
             v.setNeedsUpdateOfSupportedInterfaceOrientations()
             vc = v.presentedViewController
         }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: geometry)) { _ in
-            DispatchQueue.main.async { OrientationState.shared.refused = true }
+        // Se pide dos veces: si llega en plena transición (abriendo una pantalla completa)
+        // el sistema la rechaza; la segunda, ya asentada, sí gira. Solo si esa también
+        // falla se gira el contenido a mano.
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: geometry)) { _ in }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: geometry)) { _ in
+                DispatchQueue.main.async { OrientationState.shared.refused = true }
+            }
         }
     }
 
