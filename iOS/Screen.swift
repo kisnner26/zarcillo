@@ -383,12 +383,68 @@ struct LiveScreen: View {
     }
 }
 
+/// La orientación que eligió el usuario para Zarcillo, independiente del bloqueo
+/// de rotación del sistema: "automática" sigue al iPhone; "vertical" y
+/// "horizontal" fijan la app aunque el giro esté bloqueado en el Centro de control.
+enum AppOrientation: String, CaseIterable, Identifiable {
+    case auto, portrait, landscape
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .auto: "automática"
+        case .portrait: "vertical"
+        case .landscape: "horizontal"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .auto: "sigue el giro del iPhone"
+        case .portrait: "siempre de pie"
+        case .landscape: "siempre acostada, aunque el giro esté bloqueado"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .auto: "arrow.triangle.2.circlepath"
+        case .portrait: "iphone"
+        case .landscape: "iphone.landscape"
+        }
+    }
+    var mask: UIInterfaceOrientationMask {
+        switch self {
+        case .auto: .allButUpsideDown
+        case .portrait: .portrait
+        case .landscape: .landscape
+        }
+    }
+    static var current: AppOrientation {
+        AppOrientation(rawValue: UserDefaults.standard.string(forKey: "app.orientation") ?? "") ?? .auto
+    }
+}
+
+/// Decide las orientaciones permitidas de toda la app. Con esto (y no solo
+/// pidiéndolo) el sistema no puede devolver la app a vertical por su cuenta.
+final class OrientationDelegate: NSObject, UIApplicationDelegate {
+    static var mask: UIInterfaceOrientationMask = AppOrientation.current.mask
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Self.mask
+    }
+}
+
 enum Orientation {
-    /// Pide al sistema estas orientaciones. Lo pedido persiste, así que siempre
-    /// hay que devolver `.allButUpsideDown` al terminar.
+    /// Pide estas orientaciones. `.allButUpsideDown` significa "lo que eligió el
+    /// usuario": así, al salir del mando o de la pantalla completa, se vuelve a su preferencia.
     static func request(_ mask: UIInterfaceOrientationMask) {
+        let wanted = mask == .allButUpsideDown ? AppOrientation.current.mask : mask
+        OrientationDelegate.mask = wanted
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+        scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: wanted)) { _ in }
+    }
+
+    static func set(_ o: AppOrientation) {
+        UserDefaults.standard.set(o.rawValue, forKey: "app.orientation")
+        request(.allButUpsideDown)
     }
 }
 
@@ -414,6 +470,62 @@ struct PinchPan: UIGestureRecognizerRepresentable {
             changed(r.scale, c)
             r.scale = 1
         default: ended()
+        }
+    }
+}
+
+/// Elegir cómo se ve Zarcillo: el dibujo del iPhone gira a la posición elegida.
+struct OrientationPage: View {
+    @AppStorage("app.orientation") private var choice: AppOrientation = .auto
+
+    var body: some View {
+        StageScroll(spacing: Space.m) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.recess)
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Tone.ember.opacity(0.7), lineWidth: 2))
+                    .overlay(Image(systemName: "leaf.fill").font(.system(size: 26)).foregroundStyle(Tone.ember))
+                    .overlay(alignment: .top) {
+                        Capsule().fill(.black).frame(width: 30, height: 8).padding(.top, 8)
+                    }
+                    .frame(width: 92, height: 180)
+                    .rotationEffect(.degrees(choice == .landscape ? -90 : 0))
+                    .animation(.spring(duration: 0.6, bounce: 0.3), value: choice)
+                if choice == .auto {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(Tone.ink.opacity(0.35)).offset(x: 90, y: -70)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .frame(height: 200)
+            .animation(.spring(duration: 0.4), value: choice)
+
+            VStack(spacing: Space.s) {
+                ForEach(AppOrientation.allCases) { o in
+                    Button {
+                        Detents.shared.press()
+                        choice = o
+                        Orientation.set(o)
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: o.symbol).font(.system(size: 20, weight: .semibold))
+                                .frame(width: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(o.title).font(.system(size: 16, weight: .bold, design: .rounded))
+                                Text(o.detail).font(.system(size: 12)).opacity(0.7)
+                            }
+                            Spacer(minLength: 0)
+                            if choice == o { Image(systemName: "checkmark").font(.system(size: 15, weight: .bold)) }
+                        }
+                        .foregroundStyle(choice == o ? Tone.onEmber : Tone.ink.opacity(0.9))
+                        .padding(.horizontal, Space.m).frame(minHeight: 64)
+                        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(choice == o ? Tone.ember : Tone.key))
+                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Tone.stroke, lineWidth: choice == o ? 0 : 1))
+                    }
+                    .buttonStyle(PressScale())
+                }
+            }
+
+            Hint("Horizontal y vertical fijan solo Zarcillo, aunque tengas bloqueado el giro en el Centro de control. El mando y la pantalla completa se ponen en horizontal por su cuenta y, al salir, vuelven a lo que elijas aquí.")
         }
     }
 }

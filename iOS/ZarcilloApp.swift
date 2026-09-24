@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct ZarcilloApp: App {
+    @UIApplicationDelegateAdaptor(OrientationDelegate.self) private var orientationDelegate
     @StateObject private var remote = Remote()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -13,7 +14,10 @@ struct ZarcilloApp: App {
                 .buttonStyle(PressScale())
                 .scrollDismissesKeyboard(.interactively)
                 .persistentSystemOverlays(.hidden)
-                .onAppear { WatchLink.shared.start(remote) }
+                .onAppear {
+                    WatchLink.shared.start(remote)
+                    Orientation.request(.allButUpsideDown)
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

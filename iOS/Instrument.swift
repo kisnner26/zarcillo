@@ -50,7 +50,7 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, privacy, game, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
+    case classes, privacy, game, orientation, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
     var id: Int { rawValue }
 
     var title: String {
@@ -59,6 +59,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .brain: "cerebro"
         case .privacy: "privacidad"
         case .game: "mando"
+        case .orientation: "giro"
         case .shots: "capturas"
         case .garden: "jardín"
         case .herbarium: "herbario"
@@ -94,6 +95,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .brain: "Claude y lo que va aprendiendo"
         case .privacy: "filtro antiespía en la pantalla"
         case .game: "mando o volante para juegos"
+        case .orientation: "horizontal fija, sin depender del bloqueo"
         case .shots: "las del Mac, reveladas al llegar"
         case .garden: "lo que aprendió, hecho planta"
         case .herbarium: "fotografía una planta y guarda su ficha"
@@ -129,6 +131,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .brain: "brain.head.profile"
         case .privacy: "eye.slash"
         case .game: "gamecontroller.fill"
+        case .orientation: "rectangle.landscape.rotate"
         case .shots: "camera.viewfinder"
         case .garden: "camera.macro"
         case .herbarium: "leaf.circle"
@@ -201,7 +204,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
         case .security: [.privacy, .guardian, .near, .guest]
-        case .custom: [.garden, .herbarium, .brain, .routines, .shortcuts, .touchBar, .color, .permissions]
+        case .custom: [.orientation, .garden, .herbarium, .brain, .routines, .shortcuts, .touchBar, .color, .permissions]
         }
     }
 }
@@ -1289,6 +1292,7 @@ struct MoreStage: View {
         case .brain: BrainPage()
         case .privacy: PrivacyPage()
         case .game: GamePage()
+        case .orientation: OrientationPage()
         case .shots: ShotsPage()
         case .garden: GardenPage()
         case .herbarium: HerbariumPage()
