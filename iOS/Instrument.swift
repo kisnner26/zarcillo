@@ -48,7 +48,7 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case photos, brightness, color, gestures, laser, power, routines, shortcuts
+    case photos, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
@@ -56,6 +56,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .photos: "fotos"
         case .brightness: "brillo"
         case .color: "color"
+        case .touchBar: "touch bar"
         case .gestures: "gestos"
         case .laser: "láser"
         case .power: "energía"
@@ -69,6 +70,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .photos: "tíralas al Mac como hojas"
         case .brightness: "gira la perilla"
         case .color: "el acento de la app"
+        case .touchBar: "elige qué muestra en el Mac"
         case .gestures: "escritorios y Spotlight"
         case .laser: "apunta con el iPhone"
         case .power: "bloquear, suspender, despertar"
@@ -82,12 +84,20 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .photos: "photo.on.rectangle.angled"
         case .brightness: "sun.max"
         case .color: "paintpalette"
+        case .touchBar: "rectangle.split.3x1"
         case .gestures: "hand.draw"
         case .laser: "light.beacon.max"
         case .power: "power"
         case .routines: "sparkles"
         case .shortcuts: "command"
         }
+    }
+}
+
+extension MoreItem {
+    /// Las opciones que tienen sentido para este Mac (sin Touch Bar, no se ofrece).
+    static func visible(touchBar: Bool) -> [MoreItem] {
+        allCases.filter { $0 != .touchBar || touchBar }
     }
 }
 
@@ -190,7 +200,8 @@ struct Header: View {
         case .screen: return "Pantalla"
         case .more:
             if let open = deck.moreOpen { return open.title.capitalized }
-            return MoreItem(rawValue: deck.moreIndex)?.title.capitalized ?? "Más"
+            let items = MoreItem.visible(touchBar: remote.hasTouchBar)
+            return items.indices.contains(deck.moreIndex) ? items[deck.moreIndex].title.capitalized : "Más"
         }
     }
 
@@ -208,7 +219,8 @@ struct Header: View {
         case .screen: return remote.canCapture ? "toca la imagen para hacer clic" : "falta permiso en el Mac"
         case .more:
             if deck.moreOpen != nil { return "toca la perilla para volver" }
-            return MoreItem(rawValue: deck.moreIndex)?.detail ?? ""
+            let items = MoreItem.visible(touchBar: remote.hasTouchBar)
+            return items.indices.contains(deck.moreIndex) ? items[deck.moreIndex].detail : ""
         }
     }
 }
@@ -316,12 +328,12 @@ struct ControlDeck: View {
             withAnimation(.snappy(duration: 0.3)) { deck.appIndex = next }
             return true
         case .screen:
-            remote.send(.scroll(dx: 0, dy: Double(-step) * 36))
+            remote.scroll(dx: 0, dy: Double(-step) * 36)
             return true
         case .more:
             if deck.moreOpen == .brightness { return nudge(.brightness, step) }
             guard deck.moreOpen == nil else { return false }
-            let n = MoreItem.allCases.count
+            let n = MoreItem.visible(touchBar: remote.hasTouchBar).count
             deck.moreIndex = (deck.moreIndex + step + n) % n
             return true
         }
@@ -339,7 +351,8 @@ struct ControlDeck: View {
             remote.send(.click(button: .left))
         case .more:
             withAnimation(.spring(duration: 0.4, bounce: 0.2)) {
-                deck.moreOpen = deck.moreOpen == nil ? MoreItem(rawValue: deck.moreIndex) : nil
+                let items = MoreItem.visible(touchBar: remote.hasTouchBar)
+                deck.moreOpen = deck.moreOpen == nil && items.indices.contains(deck.moreIndex) ? items[deck.moreIndex] : nil
             }
         }
     }
@@ -841,7 +854,7 @@ struct ShortcutSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink("Editar") { ShortcutEditorPage() }
+                    NavigationLink("Editar") { ShortcutEditorPage(hidesBar: false) }
                 }
             }
             .background(Tone.body)
@@ -903,11 +916,11 @@ struct MoreStage: View {
     private var stem: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(MoreItem.allCases) { item in
-                    let selected = item.rawValue == deck.moreIndex
+                ForEach(Array(MoreItem.visible(touchBar: remote.hasTouchBar).enumerated()), id: \.element) { index, item in
+                    let selected = index == deck.moreIndex
                     Button {
                         Haptic.tap()
-                        deck.moreIndex = item.rawValue
+                        deck.moreIndex = index
                         withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
                     } label: {
                         HStack(spacing: 14) {
@@ -950,11 +963,12 @@ struct MoreStage: View {
             }
         case .photos: TossPage()
         case .color: ColorPage()
+        case .touchBar: TouchBarPage()
         case .gestures: GesturePage()
         case .laser: LaserPage()
         case .power: PowerPage()
-        case .routines: NavigationStack { RoutineList().background(Tone.recess) }
-        case .shortcuts: NavigationStack { ShortcutEditorPage().background(Tone.recess) }
+        case .routines: NavigationStack { RoutineList() }.tint(Tone.ember)
+        case .shortcuts: NavigationStack { ShortcutEditorPage() }.tint(Tone.ember)
         }
     }
 }

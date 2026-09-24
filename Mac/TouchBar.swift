@@ -33,7 +33,6 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private static let volume = NSTouchBarItem.Identifier("zarcillo.volume")
     private static let brightness = NSTouchBarItem.Identifier("zarcillo.brightness")
     private static let routines = NSTouchBarItem.Identifier("zarcillo.routines")
-    private static let more = NSTouchBarItem.Identifier("zarcillo.more")
 
     private weak var server: Server?
     private var bar: NSTouchBar?
@@ -50,6 +49,50 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
 
     /// Si la barra completa está a la vista: solo entonces vale la pena leer la música.
     var isShowing: Bool { bar?.isVisible == true }
+
+    /// Los MacBook Pro con Touch Bar, por modelo. No hay una API pública que lo
+    /// diga, y el identificador de modelo no cambia.
+    static let hasTouchBar: Bool = {
+        var size = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        var chars = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.model", &chars, &size, nil, 0)
+        let model = String(cString: chars)
+        let withBar: Set<String> = ["MacBookPro13,2", "MacBookPro13,3", "MacBookPro14,2", "MacBookPro14,3",
+                                    "MacBookPro15,1", "MacBookPro15,2", "MacBookPro15,3", "MacBookPro15,4",
+                                    "MacBookPro16,1", "MacBookPro16,2", "MacBookPro16,3", "MacBookPro16,4",
+                                    "MacBookPro17,1", "Mac14,7"]
+        return withBar.contains(model)
+    }()
+
+    /// Lo que eligió el usuario desde el iPhone.
+    static var config: TouchBarConfig {
+        get {
+            guard let d = UserDefaults.standard.data(forKey: "touchBar"),
+                  let c = try? JSONDecoder().decode(TouchBarConfig.self, from: d) else { return .standard }
+            return c
+        }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: "touchBar") }
+    }
+
+    func apply(_ config: TouchBarConfig) {
+        Self.config = config
+        if isShowing { present() }
+    }
+
+    func setShown(_ show: Bool) {
+        if show {
+            present()
+        } else if let bar {
+            for name in ["dismissSystemModalTouchBar:", "dismissSystemModalFunctionBar:"] {
+                let sel = NSSelectorFromString(name)
+                if (NSTouchBar.self as AnyObject).responds(to: sel) {
+                    _ = (NSTouchBar.self as AnyObject).perform(sel, with: bar)
+                    break
+                }
+            }
+        }
+    }
 
     init(server: Server) {
         self.server = server
@@ -80,8 +123,15 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     @objc private func present() {
         let b = NSTouchBar()
         b.delegate = self
-        // A la vista lo que más se usa; lo demás, tras el botón ✦.
-        b.defaultItemIdentifiers = [Self.playing, Self.media, Self.volume, Self.more]
+        // En el orden y con las piezas que elegiste en el iPhone.
+        let map: [TouchBarConfig.Kind: NSTouchBarItem.Identifier] = [
+            .playing: Self.playing, .media: Self.media, .volume: Self.volume,
+            .brightness: Self.brightness, .routines: Self.routines, .status: Self.status,
+        ]
+        let hasBrightness = Brightness.get() != nil
+        b.defaultItemIdentifiers = Self.config.slots
+            .filter { $0.on && ($0.kind != .brightness || hasBrightness) }
+            .compactMap { map[$0.kind] }
         bar = b
 
         for name in ["presentSystemModalTouchBar:systemTrayItemIdentifier:",
@@ -156,18 +206,6 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             let item = NSCustomTouchBarItem(identifier: id)
             routineStack.spacing = 6
             item.view = routineStack
-            return item
-
-        case Self.more:
-            let item = NSPopoverTouchBarItem(identifier: id)
-            item.collapsedRepresentationImage = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "más")
-            let inner = NSTouchBar()
-            inner.delegate = self
-            var ids: [NSTouchBarItem.Identifier] = [Self.status]
-            if Brightness.get() != nil { ids.append(Self.brightness) }
-            ids += [.fixedSpaceLarge, Self.routines]
-            inner.defaultItemIdentifiers = ids
-            item.popoverTouchBar = inner
             return item
 
         default:

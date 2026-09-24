@@ -74,6 +74,14 @@ final class Remote: ObservableObject {
     @Published private(set) var frame: UIImage?
     @Published private(set) var windows: [WindowInfo] = []
     @Published private(set) var canCapture = true
+    @Published private(set) var hasTouchBar = false
+    @Published var touchBar = TouchBarConfig.standard
+
+    // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
+    private var pendingMove = CGVector.zero
+    private var pendingScroll = CGVector.zero
+    private var flushLink: CADisplayLink?
+    private var lastInput = CACurrentMediaTime()
 
     /// Mientras el dedo gira el dial, lo que el Mac informa no lo pisa.
     var editingLevel = false
@@ -202,6 +210,13 @@ final class Remote: ObservableObject {
             }
         }
         ch.onData = { [weak self] data in
+            // Fotogramas de la pantalla en vivo: binarios, y se decodifican aquí,
+            // fuera del hilo principal, para que dibujarlos no trabe nada.
+            if data.first == Fast.frame {
+                guard let image = UIImage(data: data.dropFirst())?.preparingForDisplay() else { return }
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.frame = image } }
+                return
+            }
             guard let event = try? JSONDecoder().decode(Event.self, from: data) else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(event) } }
         }
@@ -318,6 +333,10 @@ final class Remote: ObservableObject {
             frame = UIImage(data: data)
         case .windows(let list):
             windows = list
+        case .capabilities(let bar):
+            hasTouchBar = bar
+        case .touchBarConfig(let config):
+            touchBar = config
         }
     }
 
@@ -376,6 +395,53 @@ final class Remote: ObservableObject {
         channel?.send(command)
     }
 
+    // MARK: Entrada rápida
+
+    /// Suma un movimiento del puntero; sale en el próximo fotograma.
+    func move(dx: Double, dy: Double) {
+        pendingMove.dx += dx
+        pendingMove.dy += dy
+        kick()
+    }
+
+    func scroll(dx: Double, dy: Double) {
+        pendingScroll.dx += dx
+        pendingScroll.dy += dy
+        kick()
+    }
+
+    private func kick() {
+        lastInput = CACurrentMediaTime()
+        guard flushLink == nil else { return }
+        let link = CADisplayLink(target: LinkTarget { [weak self] in self?.flush() }, selector: #selector(LinkTarget.fire))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common)
+        flushLink = link
+    }
+
+    private func flush() {
+        if pendingMove != .zero {
+            channel?.sendRaw(Fast.vector(Fast.move, pendingMove.dx, pendingMove.dy))
+            pendingMove = .zero
+        }
+        if pendingScroll != .zero {
+            channel?.sendRaw(Fast.vector(Fast.scroll, pendingScroll.dx, pendingScroll.dy))
+            pendingScroll = .zero
+        }
+        // Medio segundo sin tocar nada: se apaga hasta el próximo movimiento.
+        if CACurrentMediaTime() - lastInput > 0.5 {
+            flushLink?.invalidate()
+            flushLink = nil
+        }
+    }
+
+    // MARK: Touch Bar
+
+    func setTouchBar(_ config: TouchBarConfig) {
+        touchBar = config
+        send(.touchBar(config))
+    }
+
     func flash(_ text: String) {
         withAnimation(.spring(duration: 0.35)) { pill = text }
         pillWork?.cancel()
@@ -398,4 +464,11 @@ final class Remote: ObservableObject {
             lastLevelSend = Date()
         }
     }
+}
+
+/// `CADisplayLink` necesita un objeto de Objective-C como destino.
+final class LinkTarget: NSObject {
+    let body: () -> Void
+    init(_ body: @escaping () -> Void) { self.body = body }
+    @objc func fire() { body() }
 }

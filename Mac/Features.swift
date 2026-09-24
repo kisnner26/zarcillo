@@ -1,5 +1,7 @@
 import AppKit
 import ApplicationServices
+import CoreMedia
+import CoreImage
 import ScreenCaptureKit
 import SwiftUI
 
@@ -213,43 +215,68 @@ enum ScreenGrabber {
 
     static func requestAccess() { _ = CGRequestScreenCaptureAccess() }
 
-    private static var cachedFilter: (SCContentFilter, CGSize, Date)?
-
-    /// Una foto de la pantalla principal, ~960 px de ancho, en JPEG. Pequeña a
-    /// propósito: 5 por segundo por Wi-Fi sin que el cursor del pad se trabe.
-    static func frame() async -> Data? {
-        guard allowed else { return nil }
-        do {
-            let filter: SCContentFilter
-            let size: CGSize
-            if let c = cachedFilter, Date().timeIntervalSince(c.2) < 10 {
-                (filter, size) = (c.0, c.1)
-            } else {
-                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first
-                else { return nil }
-                filter = SCContentFilter(display: display, excludingWindows: [])
-                size = CGSize(width: display.width, height: display.height)
-                cachedFilter = (filter, size, Date())
-            }
-            let cfg = SCStreamConfiguration()
-            cfg.width = 960
-            cfg.height = Int(960 * size.height / max(size.width, 1))
-            cfg.showsCursor = true
-            let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
-            return NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: 0.5])
-        } catch {
-            cachedFilter = nil
-            return nil
-        }
-    }
-
     /// Toque en la imagen del iPhone → clic en ese punto de la pantalla real.
     static func tap(x: Double, y: Double, button: MouseButton) {
         let b = CGDisplayBounds(CGMainDisplayID())
         let p = CGPoint(x: b.minX + b.width * min(1, max(0, x)), y: b.minY + b.height * min(1, max(0, y)))
         Input.warp(to: p)
         Input.click(button)
+    }
+}
+
+/// Pantalla en vivo como un stream continuo de ScreenCaptureKit, no una foto
+/// por vez: el sistema entrega un fotograma solo cuando algo cambia, ya en la
+/// resolución pedida, y la compresión a JPEG va en su propia cola.
+final class ScreenStream: NSObject, SCStreamOutput {
+    private var stream: SCStream?
+    private let queue = DispatchQueue(label: "zarcillo.screen", qos: .userInteractive)
+    private let context = CIContext(options: [.cacheIntermediates: false])
+    private(set) var width = 0
+    /// Se llama en la cola del stream con cada JPEG listo.
+    var onFrame: ((Data) -> Void)?
+
+    func start(width: Int) async {
+        guard width != self.width || stream == nil else { return }
+        await stop()
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first
+            else { return }
+            let cfg = SCStreamConfiguration()
+            cfg.width = width
+            cfg.height = Int(Double(width) * Double(display.height) / Double(max(display.width, 1)))
+            cfg.minimumFrameInterval = CMTime(value: 1, timescale: width > 1200 ? 24 : 20)
+            cfg.pixelFormat = kCVPixelFormatType_32BGRA
+            cfg.showsCursor = true
+            cfg.queueDepth = 3
+            let s = SCStream(filter: SCContentFilter(display: display, excludingWindows: []), configuration: cfg, delegate: nil)
+            try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
+            try await s.startCapture()
+            stream = s
+            self.width = width
+        } catch {
+            stream = nil
+            self.width = 0
+        }
+    }
+
+    func stop() async {
+        if let s = stream { try? await s.stopCapture() }
+        stream = nil
+        width = 0
+    }
+
+    func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .screen, let pixels = buffer.imageBuffer else { return }
+        // Los fotogramas "sin cambios" no traen imagen nueva: no se mandan.
+        if let info = (CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]])?.first,
+           let raw = info[.status] as? Int, SCFrameStatus(rawValue: raw) != .complete { return }
+        let image = CIImage(cvPixelBuffer: pixels)
+        guard let jpeg = context.jpegRepresentation(
+            of: image, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+            options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.5])
+        else { return }
+        onFrame?(jpeg)
     }
 }
 

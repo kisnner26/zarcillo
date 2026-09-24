@@ -63,10 +63,17 @@ final class Channel {
 
     func send<T: Encodable>(_ value: T) {
         guard let body = try? JSONEncoder().encode(value) else { return }
+        sendRaw(body)
+    }
+
+    /// Manda bytes ya armados (JSON o un mensaje rápido de `Fast`). `done` se
+    /// llama cuando la red los aceptó: sirve para no encolar fotogramas si la
+    /// Wi-Fi va lenta.
+    func sendRaw(_ body: Data, done: (() -> Void)? = nil) {
         var length = UInt32(body.count).bigEndian
         var frame = Data(bytes: &length, count: 4)
         frame.append(body)
-        connection.send(content: frame, completion: .contentProcessed { _ in })
+        connection.send(content: frame, completion: .contentProcessed { _ in done?() })
     }
 
     private func readHeader() {

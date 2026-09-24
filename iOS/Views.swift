@@ -433,9 +433,9 @@ struct Trackpad: UIViewRepresentable {
             // Aceleración: movimientos lentos son precisos, rápidos cruzan la pantalla.
             let speed = hypot(dx, dy)
             let gain = 1.3 + min(speed, 30) * 0.11
-            remote.send(.move(dx: dx * gain, dy: dy * gain))
+            remote.move(dx: dx * gain, dy: dy * gain)
         }
-        v.onScroll = { dx, dy in remote.send(.scroll(dx: dx * 2, dy: dy * 2)) }
+        v.onScroll = { dx, dy in remote.scroll(dx: dx * 2, dy: dy * 2) }
         v.onClick = { remote.send(.click(button: $0)) }
         v.onPress = { remote.send(.press(down: $0)) }
         return v
@@ -694,36 +694,3 @@ final class TrackpadSurface: UIView {
     }
 }
 
-// MARK: - Editor de atajos
-
-struct ShortcutForm: View {
-    @Binding var shortcut: Shortcut
-
-    private static let keys: [String] =
-        "abcdefghijklmnopqrstuvwxyz0123456789".map(String.init)
-        + ["space", "tab", "return", "escape", "delete", "left", "right", "up", "down", "-", "=", ",", ".", "/"]
-
-    var body: some View {
-        Form {
-            Section("Nombre") {
-                TextField("nombre", text: $shortcut.title)
-            }
-            Section("Teclas") {
-                Toggle("⌘  Comando", isOn: $shortcut.command)
-                Toggle("⇧  Mayúsculas", isOn: $shortcut.shift)
-                Toggle("⌥  Opción", isOn: $shortcut.option)
-                Toggle("⌃  Control", isOn: $shortcut.control)
-                Picker("Tecla", selection: $shortcut.key) {
-                    ForEach(Self.keys, id: \.self) { k in
-                        Text(Shortcut(title: "", key: k).keyGlyph).tag(k)
-                    }
-                }
-            }
-            Section {
-                Text(shortcut.glyphs).font(.system(size: 28, weight: .semibold, design: .rounded))
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .navigationTitle(shortcut.title)
-    }
-}

@@ -222,7 +222,8 @@ enum Command: Codable {
     case laser(on: Bool)
     case laserMove(dx: Double, dy: Double)
     // Pantalla en vivo: coordenadas normalizadas 0…1 sobre la pantalla principal.
-    case screen(on: Bool)
+    /// `width`: ancho en píxeles que pide el iPhone (más en pantalla completa).
+    case screen(on: Bool, width: Int)
     case tapScreen(x: Double, y: Double, button: MouseButton)
     // Ventanas
     case listWindows
@@ -235,6 +236,9 @@ enum Command: Codable {
     case accent(hex: Int)
     /// Una foto "tirada" desde el iPhone. Viaja con sus bytes originales (HEIC, JPEG…).
     case photo(Data)
+    // Touch Bar del Mac, manejada desde el iPhone.
+    case touchBar(TouchBarConfig)
+    case touchBarShow(Bool)
 }
 
 /// Mac → iPhone.
@@ -250,4 +254,79 @@ enum Event: Codable {
     case artwork(trackID: String, data: Data)
     case frame(Data)
     case windows([WindowInfo])
+    case capabilities(touchBar: Bool)
+    case touchBarConfig(TouchBarConfig)
+}
+
+/// Qué muestra la Touch Bar de Zarcillo en el Mac y en qué orden.
+struct TouchBarConfig: Codable, Equatable {
+    struct Slot: Codable, Equatable, Identifiable {
+        var kind: Kind
+        var on: Bool
+        var id: Kind { kind }
+    }
+
+    enum Kind: String, Codable, CaseIterable {
+        case playing, media, volume, brightness, routines, status
+
+        var label: String {
+            switch self {
+            case .playing: "lo que suena"
+            case .media: "controles de música"
+            case .volume: "volumen"
+            case .brightness: "brillo"
+            case .routines: "escenas"
+            case .status: "estado del iPhone"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .playing: "music.note"
+            case .media: "playpause.fill"
+            case .volume: "speaker.wave.2.fill"
+            case .brightness: "sun.max.fill"
+            case .routines: "sparkles"
+            case .status: "iphone"
+            }
+        }
+    }
+
+    var slots: [Slot]
+
+    static let standard = TouchBarConfig(slots: [
+        Slot(kind: .playing, on: true),
+        Slot(kind: .media, on: true),
+        Slot(kind: .volume, on: true),
+        Slot(kind: .brightness, on: false),
+        Slot(kind: .routines, on: false),
+        Slot(kind: .status, on: false),
+    ])
+}
+
+/// Mensajes que se mandan muchas veces por segundo (puntero, desplazamiento,
+/// pantalla en vivo) van en binario: un byte de tipo y los datos crudos, sin
+/// pasar por JSON. Un mensaje JSON siempre empieza con `{`, así que no se
+/// confunden.
+enum Fast {
+    static let move: UInt8 = 1
+    static let scroll: UInt8 = 2
+    static let frame: UInt8 = 3
+
+    static func vector(_ tag: UInt8, _ dx: Double, _ dy: Double) -> Data {
+        var d = Data([tag])
+        var x = Float32(dx).bitPattern.bigEndian, y = Float32(dy).bitPattern.bigEndian
+        d.append(Data(bytes: &x, count: 4))
+        d.append(Data(bytes: &y, count: 4))
+        return d
+    }
+
+    static func readVector(_ d: Data) -> (Double, Double)? {
+        guard d.count == 9 else { return nil }
+        func f(_ at: Int) -> Double {
+            let bits = d[d.startIndex + at ..< d.startIndex + at + 4].reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+            return Double(Float32(bitPattern: bits))
+        }
+        return (f(1), f(5))
+    }
 }

@@ -9,7 +9,7 @@ struct ZarcilloApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(remote)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(.dark)
                 .persistentSystemOverlays(.hidden)
         }
         .onChange(of: scenePhase) { _, phase in

@@ -17,8 +17,12 @@ final class Server: ObservableObject {
     let macName = Host.current().localizedName ?? "Mac"
 
     /// Clientes que están mirando la pantalla en vivo.
-    private var watchers: Set<ObjectIdentifier> = []
-    private var streaming: Task<Void, Never>?
+    /// Quién mira la pantalla en vivo y con qué ancho.
+    private var watchers: [ObjectIdentifier: Int] = [:]
+    /// Fotograma en camino por cliente: si la Wi-Fi no dio abasto con el
+    /// anterior, el nuevo se descarta en vez de encolarse (menos retraso).
+    private var inFlight: Set<ObjectIdentifier> = []
+    private let screen = ScreenStream()
     /// AppleScript tarda decenas de ms: va en su propia cola para no frenar el puntero.
     private let musicQueue = DispatchQueue(label: "zarcillo.music")
     private var nowPlaying: NowPlaying?
@@ -128,8 +132,28 @@ final class Server: ObservableObject {
         // `DispatchQueue.main.async` y no `Task`: garantiza que los movimientos
         // del puntero se ejecuten en el orden en que llegaron.
         channel.onData = { [weak self] data in
+            // Camino rápido: puntero y desplazamiento en binario, directo a la
+            // cola de entrada, sin JSON ni hilo principal.
+            if let tag = data.first, tag != UInt8(ascii: "{") {
+                guard Input.isTrusted, let v = Fast.readVector(data) else { return }
+                Input.queue.async {
+                    if tag == Fast.move { Input.move(dx: v.0, dy: v.1) }
+                    else if tag == Fast.scroll { Input.scroll(dx: v.0, dy: v.1) }
+                }
+                return
+            }
             guard let command = try? JSONDecoder().decode(Command.self, from: data) else { return }
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(command, from: key) } }
+            // Clics y arrastres también van por la cola de entrada, en orden con el puntero.
+            switch command {
+            case .click(let button):
+                if Input.isTrusted { Input.queue.async { Input.click(button) } }
+            case .press(let down):
+                if Input.isTrusted { Input.queue.async { Input.press(down: down) } }
+            case .tapScreen(let x, let y, let button):
+                if Input.isTrusted { Input.queue.async { ScreenGrabber.tap(x: x, y: y, button: button) } }
+            default:
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(command, from: key) } }
+            }
         }
         channel.start()
     }
@@ -137,8 +161,9 @@ final class Server: ObservableObject {
     private func drop(_ key: ObjectIdentifier) {
         clients[key] = nil
         devices = clients.values.map(\.name)
-        watchers.remove(key)
-        if watchers.isEmpty { streaming?.cancel(); streaming = nil }
+        watchers[key] = nil
+        inFlight.remove(key)
+        updateStreaming()
         if clients.isEmpty { laser.setOn(false) }
     }
 
@@ -163,6 +188,8 @@ final class Server: ObservableObject {
             reply(key, .machine(hardwareAddress: m.hardware, ip: m.ip))
             reply(key, .permissions(accessibility: Input.isTrusted, screen: ScreenGrabber.allowed))
             reply(key, .nowPlaying(nowPlaying))
+            reply(key, .capabilities(touchBar: TouchBarController.hasTouchBar))
+            reply(key, .touchBarConfig(TouchBarController.config))
             artworkSent = nil
             hud.showMessage("\(device) conectado", symbol: "iphone")
 
@@ -191,19 +218,14 @@ final class Server: ObservableObject {
 
         case .move(let dx, let dy):
             guard allowed(key) else { return }
-            Input.move(dx: dx, dy: dy)
+            Input.queue.async { Input.move(dx: dx, dy: dy) }
 
-        case .click(let button):
-            guard allowed(key) else { return }
-            Input.click(button)
-
-        case .press(let down):
-            guard allowed(key) else { return }
-            Input.press(down: down)
+        case .click, .press:
+            _ = allowed(key)   // ya se ejecutó en la cola de entrada; aquí solo se avisa si falta permiso
 
         case .scroll(let dx, let dy):
             guard allowed(key) else { return }
-            Input.scroll(dx: dx, dy: dy)
+            Input.queue.async { Input.scroll(dx: dx, dy: dy) }
 
         case .media(let media):
             guard allowed(key) else { return }
@@ -243,17 +265,16 @@ final class Server: ObservableObject {
         case .laserMove(let dx, let dy):
             laser.move(dx: dx, dy: dy)
 
-        case .screen(let on):
-            if on { watchers.insert(key) } else { watchers.remove(key) }
-            if !ScreenGrabber.allowed {
+        case .screen(let on, let width):
+            watchers[key] = on ? min(max(width, 480), 2400) : nil
+            if on, !ScreenGrabber.allowed {
                 ScreenGrabber.requestAccess()
                 reply(key, .permissions(accessibility: Input.isTrusted, screen: false))
             }
             updateStreaming()
 
-        case .tapScreen(let x, let y, let button):
-            guard allowed(key) else { return }
-            ScreenGrabber.tap(x: x, y: y, button: button)
+        case .tapScreen:
+            break   // va por la cola de entrada
 
         case .listWindows:
             if Input.isTrusted { reply(key, .windows(Windows.list())) }
@@ -283,6 +304,12 @@ final class Server: ObservableObject {
             // entera por aquí, el HUD y la Touch Bar en su próximo repintado.
             objectWillChange.send()
             touchBar?.refresh()
+
+        case .touchBar(let config):
+            touchBar?.apply(config)
+
+        case .touchBarShow(let show):
+            touchBar?.setShown(show)
 
         case .photo(let data):
             photos.receive(data)
@@ -324,20 +351,27 @@ final class Server: ObservableObject {
 
     // MARK: Pantalla en vivo
 
+    /// Arranca, ajusta o detiene el stream según quién esté mirando. Se usa el
+    /// ancho más grande pedido (pantalla completa pide más).
     private func updateStreaming() {
-        guard !watchers.isEmpty, ScreenGrabber.allowed else {
-            streaming?.cancel()
-            streaming = nil
-            return
+        let width = watchers.values.max()
+        Task { @MainActor in
+            guard let width, ScreenGrabber.allowed else { await screen.stop(); return }
+            screen.onFrame = { [weak self] jpeg in
+                var body = Data([Fast.frame])
+                body.append(jpeg)
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver(body) } }
+            }
+            await screen.start(width: width)
         }
-        guard streaming == nil else { return }
-        streaming = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                guard let self, !self.watchers.isEmpty else { return }
-                if let frame = await ScreenGrabber.frame() {
-                    for key in self.watchers { self.reply(key, .frame(frame)) }
-                }
-                try? await Task.sleep(for: .milliseconds(180))
+    }
+
+    private func deliver(_ frame: Data) {
+        for key in watchers.keys where !inFlight.contains(key) {
+            guard let channel = clients[key]?.channel else { continue }
+            inFlight.insert(key)
+            channel.sendRaw(frame) { [weak self] in
+                DispatchQueue.main.async { MainActor.assumeIsolated { _ = self?.inFlight.remove(key) } }
             }
         }
     }
@@ -390,6 +424,7 @@ final class Server: ObservableObject {
     /// control), el dial del iPhone se entera.
     private func tick() {
         let wasCapture = canCapture
+        Input.refreshTrust()
         canControl = Input.isTrusted
         canCapture = ScreenGrabber.allowed
         if canCapture != wasCapture {

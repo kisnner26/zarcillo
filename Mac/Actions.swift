@@ -83,7 +83,16 @@ enum Input {
     private static var lastClick = (time: Date.distantPast, button: MouseButton.left, count: 0)
 
     /// Publicar eventos en otras apps exige el permiso de Accesibilidad.
-    static var isTrusted: Bool { AXIsProcessTrusted() }
+    ///
+    /// Se guarda en memoria y se refresca cada segundo y medio: preguntarle al
+    /// sistema en cada movimiento del puntero (cientos por segundo) sumaba latencia.
+    nonisolated(unsafe) private(set) static var isTrusted = AXIsProcessTrusted()
+
+    static func refreshTrust() { isTrusted = AXIsProcessTrusted() }
+
+    /// Toda la entrada (puntero, clics, desplazamiento) va por esta cola, en
+    /// orden y sin esperar al hilo principal.
+    static let queue = DispatchQueue(label: "zarcillo.input", qos: .userInteractive)
 
     static func requestAccess() {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
