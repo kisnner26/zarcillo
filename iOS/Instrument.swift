@@ -1049,7 +1049,6 @@ struct MoreStage: View {
     private var stem: some View {
         let all = MoreItem.visible(touchBar: remote.hasTouchBar)
         let live = all.filter { remote.isActive($0) }
-        let selected = all.indices.contains(deck.moreIndex) ? all[deck.moreIndex] : nil
         return GeometryReader { geo in
             let wide = StageMetrics.wide(geo.size)
             let columns = [GridItem(.adaptive(minimum: wide ? 96 : 92, maximum: 140), spacing: Space.s)]
@@ -1074,7 +1073,7 @@ struct MoreStage: View {
                     .frame(maxWidth: wide ? 760 : 560)
                     .padding(.horizontal, wide ? Space.l : Space.m)
                     .padding(.top, Space.m)
-                    .padding(.bottom, 84)   // aire para la etiqueta de abajo
+                    .padding(.bottom, Space.m)
                     .frame(maxWidth: .infinity)
                 }
                 .scrollIndicators(.hidden)
@@ -1084,33 +1083,6 @@ struct MoreStage: View {
                     withAnimation(.spring(duration: 0.35)) { proxy.scrollTo(all[i], anchor: .center) }
                 }
             }
-            // La elegida con la perilla, explicada en una línea.
-            .overlay(alignment: .bottom) {
-                if let item = selected {
-                    HStack(spacing: 10) {
-                        Image(systemName: item.symbol).font(.system(size: 14, weight: .bold)).foregroundStyle(Tone.ember)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(item.title).font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
-                            Text(item.detail).font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.6)).lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.4))
-                    }
-                    .padding(.horizontal, 16).frame(height: 54)
-                    .frame(maxWidth: 420)
-                    .background(Capsule().fill(.ultraThinMaterial))
-                    .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
-                    .contentShape(Capsule())
-                    .onTapGesture {
-                        Haptic.tap()
-                        withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
-                    }
-                    .padding(.horizontal, Space.m).padding(.bottom, Space.m)
-                    .id(item)
-                    .transition(.opacity)
-                }
-            }
-            .animation(.spring(duration: 0.3), value: selected)
             .animation(.spring(duration: 0.45), value: live)
         }
     }
