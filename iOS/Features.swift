@@ -2,158 +2,6 @@ import CoreMotion
 import SwiftUI
 import UIKit
 
-// MARK: - Música
-
-struct MusicPage: View {
-    @EnvironmentObject private var remote: Remote
-    @Environment(\.isLandscape) private var landscape
-    @State private var scrub: Double?
-    @State private var taps: [MediaKey: Int] = [:]
-
-    var body: some View {
-        Group {
-            if let np = remote.nowPlaying {
-                if landscape {
-                    HStack(spacing: 30) {
-                        cover(np).frame(maxHeight: .infinity)
-                        VStack(spacing: 18) { info(np); controls(np); volume }
-                            .frame(maxWidth: 380)
-                    }
-                    .padding(.top, 40).padding(.bottom, 12).padding(.horizontal, 24)
-                } else {
-                    VStack(spacing: 22) {
-                        cover(np).padding(.horizontal, 36)
-                        info(np)
-                        controls(np)
-                        volume
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.top, 60).padding(.horizontal, 24)
-                }
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 52, weight: .light))
-                        .foregroundStyle(Tone.ink.opacity(0.6))
-                        .floating()
-                    Text("Nada sonando en Música ni en Spotify")
-                        .font(.callout.weight(.medium)).foregroundStyle(Tone.ink.opacity(0.7))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .animation(.spring(duration: 0.5), value: remote.nowPlaying?.trackID)
-    }
-
-    private func cover(_ np: NowPlaying) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 26, style: .continuous).fill(.black.opacity(0.85))
-            if let art = remote.artwork {
-                Image(uiImage: art).resizable().scaledToFill()
-                    .transition(.opacity.combined(with: .scale(scale: 1.05)))
-            } else {
-                Image(systemName: "music.note").font(.system(size: 60)).foregroundStyle(.white.opacity(0.4))
-            }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        // La carátula "respira" mientras suena y se achica en pausa.
-        .scaleEffect(np.playing ? 1 : 0.9)
-        .shadow(color: Tone.ink.opacity(np.playing ? 0.45 : 0.2), radius: np.playing ? 26 : 10, y: 14)
-        .animation(.spring(duration: 0.6, bounce: 0.3), value: np.playing)
-        .id(np.trackID)
-    }
-
-    private func info(_ np: NowPlaying) -> some View {
-        VStack(spacing: 10) {
-            VStack(spacing: 3) {
-                Text(np.title).font(.system(size: 20, weight: .bold, design: .rounded)).lineLimit(1)
-                Text(np.artist).font(.system(size: 15, weight: .medium)).opacity(0.7).lineLimit(1)
-            }
-            .foregroundStyle(Tone.ink)
-            .contentTransition(.opacity)
-
-            TimelineView(.periodic(from: .now, by: 0.5)) { tl in
-                let pos = scrub ?? remote.position(at: tl.date)
-                VStack(spacing: 4) {
-                    GeometryReader { g in
-                        let frac = np.duration > 0 ? pos / np.duration : 0
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Tone.ink.opacity(0.18))
-                            Capsule().fill(Tone.ink).frame(width: max(6, g.size.width * frac))
-                        }
-                        .frame(height: scrub == nil ? 6 : 10)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .gesture(DragGesture(minimumDistance: 0)
-                            .onChanged { v in scrub = max(0, min(1, v.location.x / g.size.width)) * np.duration }
-                            .onEnded { _ in
-                                if let s = scrub { remote.send(.seek(seconds: s)) }
-                                Haptic.tap()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { scrub = nil }
-                            })
-                        .animation(.spring(duration: 0.25), value: scrub == nil)
-                    }
-                    .frame(height: 22)
-                    HStack {
-                        Text(clock(pos))
-                        Spacer()
-                        Text("-" + clock(max(0, np.duration - pos)))
-                    }
-                    .font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit()
-                    .foregroundStyle(Tone.ink.opacity(0.6))
-                }
-            }
-        }
-    }
-
-    private func controls(_ np: NowPlaying) -> some View {
-        HStack(spacing: 34) {
-            control(.previous, "backward.fill", 24)
-            control(.playPause, np.playing ? "pause.fill" : "play.fill", 34)
-            control(.next, "forward.fill", 24)
-        }
-    }
-
-    private func control(_ key: MediaKey, _ symbol: String, _ size: CGFloat) -> some View {
-        Button {
-            Haptic.tap()
-            taps[key, default: 0] += 1
-            remote.send(.media(key))
-        } label: {
-            Image(systemName: symbol)
-                .font(.system(size: size, weight: .bold))
-                .foregroundStyle(key == .playPause ? .white : Tone.ink)
-                .contentTransition(.symbolEffect(.replace))
-                .symbolEffect(.bounce, value: taps[key, default: 0])
-                .frame(width: key == .playPause ? 76 : 50, height: key == .playPause ? 76 : 50)
-                .background(Circle().fill(key == .playPause ? Color.black.opacity(0.88) : .clear))
-        }
-        .buttonStyle(PressScale())
-    }
-
-    private var volume: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "speaker.fill")
-            Slider(value: Binding(get: { remote.volume },
-                                  set: { remote.setLevel(.volume, $0, final: false) }),
-                   onEditingChanged: { editing in
-                       remote.editingLevel = editing
-                       if !editing { remote.setLevel(.volume, remote.volume, final: true) }
-                   })
-            .tint(Tone.ink)
-            Image(systemName: "speaker.wave.3.fill")
-        }
-        .font(.system(size: 13))
-        .foregroundStyle(Tone.ink.opacity(0.7))
-    }
-
-    private func clock(_ s: Double) -> String {
-        let t = Int(s.rounded())
-        return String(format: "%d:%02d", t / 60, t % 60)
-    }
-}
-
 // MARK: - Pantalla en vivo
 
 struct ScreenPage: View {
@@ -213,7 +61,7 @@ struct ScreenPage: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
-        .padding(.top, 48).padding(.horizontal, 12).padding(.bottom, 8)
+        .padding(10)
         .onAppear { remote.send(.screen(on: true)) }
         .onDisappear { remote.send(.screen(on: false)) }
     }
@@ -228,81 +76,6 @@ struct ScreenPage: View {
         taps += 1
         Haptic.tap()
         remote.send(.tapScreen(x: p.x / fit.width, y: p.y / fit.height, button: button))
-    }
-}
-
-// MARK: - Más
-
-struct MorePage: View {
-    @EnvironmentObject private var remote: Remote
-    @Environment(\.isLandscape) private var landscape
-
-    private struct Item: Identifiable {
-        let id: String
-        let title: String
-        let subtitle: String
-        let symbol: String
-    }
-
-    private let items = [
-        Item(id: "dial", title: "dial", subtitle: "volumen y brillo", symbol: "dial.medium.fill"),
-        Item(id: "gestos", title: "gestos", subtitle: "escritorios y Spotlight", symbol: "hand.draw.fill"),
-        Item(id: "laser", title: "láser", subtitle: "presentaciones", symbol: "light.beacon.max.fill"),
-        Item(id: "energia", title: "energía", subtitle: "bloquear, suspender, despertar", symbol: "power"),
-        Item(id: "escenas", title: "escenas", subtitle: "varias acciones de un toque", symbol: "sparkles"),
-        Item(id: "atajos", title: "atajos", subtitle: "teclas del pad", symbol: "command"),
-    ]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: landscape ? 180 : 150), spacing: 14)], spacing: 14) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                        NavigationLink(value: item.id) { card(item) }
-                            .buttonStyle(PressScale())
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .padding(.horizontal, 18).padding(.top, landscape ? 44 : 60).padding(.bottom, 16)
-            }
-            .scrollIndicators(.hidden)
-            .background(Color.clear)
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: String.self) { id in
-                Group {
-                    switch id {
-                    case "dial": DialPage()
-                    case "gestos": GesturePage()
-                    case "laser": LaserPage()
-                    case "energia": PowerPage()
-                    case "escenas": RoutineList()
-                    default: ShortcutEditorPage()
-                    }
-                }
-                .background(Glow())
-                .toolbarBackground(.hidden, for: .navigationBar)
-            }
-        }
-        .tint(Tone.ink)
-    }
-
-    private func card(_ item: Item) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: item.symbol)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(Circle().fill(.black.opacity(0.85)))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(.system(size: 17, weight: .bold, design: .rounded))
-                Text(item.subtitle).font(.system(size: 12, weight: .medium)).opacity(0.65).lineLimit(2)
-            }
-            .foregroundStyle(Tone.ink)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.22)))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.white.opacity(0.35), lineWidth: 1))
     }
 }
 
@@ -324,7 +97,7 @@ struct LaserPage: View {
                     .frame(width: 220, height: 220)
                     .blur(radius: aiming ? 30 : 10)
                     .scaleEffect(aiming ? 1.15 : 0.9)
-                Circle().fill(.black.opacity(0.88)).frame(width: 170, height: 170)
+                Circle().fill(Tone.key).frame(width: 170, height: 170)
                 VStack(spacing: 6) {
                     Image(systemName: "light.beacon.max.fill")
                         .font(.system(size: 38, weight: .semibold))
@@ -361,7 +134,7 @@ struct LaserPage: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 150, height: 58)
-                .background(Capsule().fill(.black.opacity(0.85)))
+                .background(Capsule().fill(Tone.key))
         }
         .buttonStyle(PressScale())
     }
@@ -427,7 +200,7 @@ struct PowerPage: View {
             HStack(spacing: 14) {
                 Image(systemName: symbol).font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white).frame(width: 46, height: 46)
-                    .background(Circle().fill(.black.opacity(0.85)))
+                    .background(Circle().fill(Tone.key))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 17, weight: .bold, design: .rounded))
                     Text(detail).font(.system(size: 12, weight: .medium)).opacity(0.65)
@@ -437,7 +210,7 @@ struct PowerPage: View {
             }
             .padding(12)
             .frame(maxWidth: 480)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white.opacity(0.22)))
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
         }
         .buttonStyle(PressScale())
     }
@@ -464,7 +237,7 @@ struct RoutineStrip: View {
                             .foregroundStyle(.white)
                             .symbolEffect(.bounce, value: taps[r.id, default: 0])
                             .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(Capsule().fill(.black.opacity(0.85)))
+                            .background(Capsule().fill(Tone.key))
                             .overlay {
                                 Capsule().stroke(.white, lineWidth: 2)
                                     .keyframeAnimator(initialValue: RippleState(), trigger: taps[r.id, default: 0]) { v, s in
@@ -502,12 +275,12 @@ struct RoutineList: View {
             }
             .onDelete { remote.routines.remove(atOffsets: $0) }
             .onMove { remote.routines.move(fromOffsets: $0, toOffset: $1) }
-            .listRowBackground(Color.white.opacity(0.35))
+            .listRowBackground(Tone.key)
 
             Button {
                 remote.routines.append(Routine(name: "nueva escena", symbol: "sparkles", steps: []))
             } label: { Label("Nueva escena", systemImage: "plus") }
-                .listRowBackground(Color.white.opacity(0.35))
+                .listRowBackground(Tone.key)
         }
         .scrollContentBackground(.hidden)
         .navigationTitle("Escenas")
@@ -533,7 +306,7 @@ struct RoutineEditor: View {
                             Image(systemName: s)
                                 .font(.system(size: 18))
                                 .frame(width: 40, height: 40)
-                                .background(Circle().fill(routine.symbol == s ? Color.black.opacity(0.85) : .clear))
+                                .background(Circle().fill(routine.symbol == s ? Tone.key : .clear))
                                 .foregroundStyle(routine.symbol == s ? .white : .primary)
                                 .onTapGesture { withAnimation(.spring) { routine.symbol = s } }
                         }
@@ -650,11 +423,11 @@ struct ShortcutEditorPage: View {
             }
             .onDelete { remote.shortcuts.remove(atOffsets: $0) }
             .onMove { remote.shortcuts.move(fromOffsets: $0, toOffset: $1) }
-            .listRowBackground(Color.white.opacity(0.35))
+            .listRowBackground(Tone.key)
             Button {
                 remote.shortcuts.append(Shortcut(title: "nuevo atajo", key: "a", command: true))
             } label: { Label("Agregar atajo", systemImage: "plus") }
-                .listRowBackground(Color.white.opacity(0.35))
+                .listRowBackground(Tone.key)
         }
         .scrollContentBackground(.hidden)
         .navigationTitle("Atajos")
@@ -688,7 +461,7 @@ struct KeyboardBar: View {
                                 .foregroundStyle(.white)
                                 .frame(minWidth: 44, minHeight: 36)
                                 .padding(.horizontal, 4)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.8)))
+                                .background(RoundedRectangle(cornerRadius: 10).fill(Tone.key))
                         }
                         .buttonStyle(PressScale())
                     }
@@ -718,7 +491,7 @@ struct KeyboardBar: View {
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(Capsule().fill(.black.opacity(0.88)))
+            .background(Capsule().fill(Tone.key))
         }
         .padding(.horizontal, 12).padding(.bottom, 8)
         .onAppear { focused = true }

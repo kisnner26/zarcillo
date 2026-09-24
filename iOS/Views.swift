@@ -4,10 +4,20 @@ import UIKit
 // MARK: - Tono
 
 enum Tone {
-    static let ink = Color(red: 0.17, green: 0.07, blue: 0.03)
+    /// Texto y trazos: crema cálido sobre la cerámica.
+    static let ink = Color(red: 0.96, green: 0.91, blue: 0.86)
+    /// La cerámica del cuerpo, el hueco del escenario y las teclas.
+    static let body = Color(red: 0.106, green: 0.078, blue: 0.067)
+    static let recess = Color(red: 0.07, green: 0.051, blue: 0.043)
+    static let key = Color(red: 0.165, green: 0.125, blue: 0.11)
+    static let stroke = Color(red: 0.23, green: 0.17, blue: 0.145)
+    /// La brasa: el naranja del icono.
+    static let ember = Color(red: 0.94, green: 0.54, blue: 0.29)
+    static let emberDeep = Color(red: 0.78, green: 0.39, blue: 0.17)
+    static let leaf = Color(red: 0.62, green: 0.85, blue: 0.62)
+    // Nombres viejos, para los efectos que aún los usan.
     static let peach = Color(red: 1.0, green: 0.80, blue: 0.64)
-    static let orange = Color(red: 0.97, green: 0.55, blue: 0.30)
-    static let ember = Color(red: 0.83, green: 0.30, blue: 0.13)
+    static let orange = ember
 }
 
 /// La superficie del control: naranja cálido que brilla, como una lámpara.
@@ -15,19 +25,16 @@ struct Glow: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
 
     var body: some View {
-        // Dos focos de luz que derivan despacio: la superficie parece viva sin
-        // distraer. 20 cuadros por segundo alcanzan para un movimiento tan lento.
+        // La cerámica, con el calor de la brasa subiendo desde abajo. Respira
+        // despacio: 20 cuadros por segundo alcanzan.
         TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
             let t = reduce ? 0 : tl.date.timeIntervalSinceReferenceDate
             ZStack {
-                LinearGradient(colors: [Tone.peach, Tone.orange, Tone.ember],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                RadialGradient(colors: [.white.opacity(0.4), .clear],
-                               center: UnitPoint(x: 0.28 + 0.10 * sin(t * 0.21), y: 0.18 + 0.07 * cos(t * 0.17)),
-                               startRadius: 0, endRadius: 470)
-                RadialGradient(colors: [Tone.ember.opacity(0.5), .clear],
-                               center: UnitPoint(x: 0.82 + 0.10 * cos(t * 0.13), y: 0.88 + 0.08 * sin(t * 0.19)),
-                               startRadius: 0, endRadius: 400)
+                Tone.body
+                RadialGradient(colors: [Tone.ember.opacity(0.20 + 0.05 * sin(t * 0.8)), .clear],
+                               center: UnitPoint(x: 0.5, y: 1.0), startRadius: 0, endRadius: 520)
+                RadialGradient(colors: [Tone.ember.opacity(0.06), .clear],
+                               center: UnitPoint(x: 0.1 + 0.05 * sin(t * 0.2), y: 0.05), startRadius: 0, endRadius: 360)
             }
         }
         .ignoresSafeArea()
@@ -87,33 +94,11 @@ extension EnvironmentValues {
 
 struct RootView: View {
     @EnvironmentObject private var remote: Remote
-    @Environment(\.isLandscape) private var landscape
-    @State private var page = 0
-
     var body: some View {
         ZStack {
             Glow()
             if case .connected = remote.phase {
-                // En horizontal sobra ancho y falta alto: la barra pasa a un riel a la izquierda.
-                let layout = landscape ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
-                layout {
-                    if landscape { PageBar(page: $page, vertical: true) }
-                    ZStack {
-                        switch page {
-                        case 0: AppsPage()
-                        case 1: PadPage()
-                        case 2: MusicPage()
-                        case 3: ScreenPage()
-                        default: MorePage()
-                        }
-                    }
-                    .id(page)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.96)).combined(with: .offset(y: 14)),
-                        removal: .opacity.combined(with: .scale(scale: 1.02))))
-                    if !landscape { PageBar(page: $page, vertical: false) }
-                }
+                Instrument()
             } else {
                 ConnectView()
                     .transition(.opacity.combined(with: .scale(scale: 0.94)))
@@ -146,51 +131,11 @@ struct StatusPill: View {
                     .contentTransition(.opacity)
             }
             .padding(.horizontal, 14).padding(.vertical, 7)
-            .background(Capsule().fill(.black).shadow(color: .black.opacity(0.25), radius: 8, y: 3))
+            .background(Capsule().fill(Tone.key).shadow(color: .black.opacity(0.25), radius: 8, y: 3))
             .padding(.top, 6)
             .transition(.scale(scale: 0.6, anchor: .top).combined(with: .opacity))
             .animation(.spring(duration: 0.45, bounce: 0.35), value: remote.pill)
         }
-    }
-}
-
-struct PageBar: View {
-    @Binding var page: Int
-    var vertical: Bool
-    @Namespace private var selection
-    private let items = [("square.grid.2x2.fill", "apps"), ("hand.point.up.left.fill", "pad"),
-                         ("music.note", "música"), ("display", "pantalla"), ("ellipsis.circle.fill", "más")]
-
-    var body: some View {
-        let layout = vertical ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
-        layout {
-            ForEach(items.indices, id: \.self) { i in
-                Button {
-                    Haptic.tap()
-                    withAnimation(.spring(duration: 0.42, bounce: 0.3)) { page = i }
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: items[i].0).font(.system(size: 17, weight: .semibold))
-                            .symbolEffect(.bounce, value: page == i)
-                        Text(items[i].1).font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundStyle(page == i ? .white : .white.opacity(0.5))
-                    .frame(maxWidth: vertical ? 56 : .infinity, maxHeight: vertical ? .infinity : nil)
-                    .padding(.vertical, 8)
-                    .background {
-                        if page == i {
-                            Capsule().fill(Color.white.opacity(0.16))
-                                .matchedGeometryEffect(id: "selection", in: selection)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(5)
-        .background(Capsule().fill(.black.opacity(0.82)))
-        .padding(vertical ? .vertical : .horizontal, vertical ? 10 : 22)
-        .padding(vertical ? .leading : .bottom, 6)
     }
 }
 
@@ -267,7 +212,7 @@ struct ConnectView: View {
                             Label(remote.name(mac), systemImage: "laptopcomputer")
                                 .font(.headline).foregroundStyle(.white)
                                 .frame(maxWidth: 280).padding(.vertical, 12)
-                                .background(Capsule().fill(.black.opacity(0.85)))
+                                .background(Capsule().fill(Tone.key))
                         }
                         .buttonStyle(PressScale())
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -313,7 +258,7 @@ struct ConnectView: View {
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
                         .frame(width: 44, height: 56)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(filled ? 0.85 : 0.35)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(filled ? Tone.ember : Tone.key))
                         .overlay {
                             // La casilla que espera el siguiente dígito late.
                             if next {
@@ -331,266 +276,6 @@ struct ConnectView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
-    }
-}
-
-// MARK: - Apps
-
-struct AppsPage: View {
-    @EnvironmentObject private var remote: Remote
-    @Environment(\.isLandscape) private var landscape
-    @State private var appeared = false
-
-    var body: some View {
-        ScrollView {
-            RoutineStrip().padding(.top, landscape ? 36 : 50)
-            if remote.apps.isEmpty {
-                ProgressView().tint(Tone.ink).padding(.top, 100)
-            }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: landscape ? 70 : 74), spacing: 16)],
-                      spacing: landscape ? 16 : 22) {
-                ForEach(Array(remote.apps.enumerated()), id: \.element.id) { i, app in
-                    AppIconButton(app: app, image: remote.icons[app.id], index: i,
-                                  side: landscape ? 62 : 70, appeared: appeared,
-                                  windows: remote.windows(of: app.id),
-                                  onWindow: { remote.send(.focusWindow(id: $0.id)); Haptic.thump() }) {
-                        remote.launch(app)
-                    }
-                }
-            }
-            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 16)
-        }
-        .scrollIndicators(.hidden)
-        .refreshable { remote.send(.listApps) }
-        // La cascada arranca cuando hay iconos que mostrar, no al abrir la pantalla vacía.
-        .onAppear { if !remote.apps.isEmpty { appeared = true } }
-        .onChange(of: remote.apps.isEmpty) { _, empty in if !empty { appeared = true } }
-        // Las ventanas cambian seguido: se piden al entrar y cada pocos segundos.
-        .task {
-            while !Task.isCancelled {
-                remote.send(.listWindows)
-                try? await Task.sleep(for: .seconds(4))
-            }
-        }
-    }
-}
-
-/// Un icono de app: entra en cascada, rebota al tocarlo y suelta un anillo de luz.
-struct AppIconButton: View {
-    let app: AppTile
-    let image: UIImage?
-    let index: Int
-    let side: CGFloat
-    let appeared: Bool
-    var windows: [WindowInfo] = []
-    var onWindow: (WindowInfo) -> Void = { _ in }
-    let action: () -> Void
-    @State private var taps = 0
-
-    var body: some View {
-        Button {
-            Haptic.thump()
-            taps += 1
-            action()
-        } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    Ripple(trigger: taps, cornerRadius: side * 0.24)
-                        .frame(width: side, height: side)
-                    if let image {
-                        Image(uiImage: image).resizable().interpolation(.high)
-                            .frame(width: side, height: side)
-                            .shadow(color: Tone.ink.opacity(0.35), radius: 8, y: 5)
-                            .boing(taps)
-                    }
-                }
-                Circle()
-                    .fill(app.running ? Color.white : .clear)
-                    .frame(width: 5, height: 5)
-                    .shadow(color: .white.opacity(app.running ? 0.9 : 0), radius: 4)
-                    .animation(.easeInOut(duration: 0.3), value: app.running)
-            }
-        }
-        .buttonStyle(PressScale())
-        .accessibilityLabel(app.name)
-        // Mantener pulsado muestra sus ventanas para saltar a una en concreto.
-        .contextMenu {
-            Section(app.name) {
-                if windows.isEmpty {
-                    Text(app.running ? "sin ventanas abiertas" : "no está abierta")
-                }
-                ForEach(windows) { w in
-                    Button { onWindow(w) } label: {
-                        Label(w.title, systemImage: w.minimized ? "arrow.up.right.square" : "macwindow")
-                    }
-                }
-                Button { action() } label: { Label("Abrir o traer al frente", systemImage: "arrow.up.forward.app") }
-            }
-        }
-        .scaleEffect(appeared ? 1 : 0.3)
-        .opacity(appeared ? 1 : 0)
-        .rotationEffect(.degrees(appeared ? 0 : -12))
-        .animation(.spring(duration: 0.55, bounce: 0.4).delay(Double(index) * 0.035), value: appeared)
-    }
-}
-
-// MARK: - Dial
-
-struct DialPage: View {
-    @EnvironmentObject private var remote: Remote
-    @Environment(\.isLandscape) private var landscape
-    @State private var kind: LevelKind = .volume
-
-    var body: some View {
-        Group {
-            if landscape {
-                HStack(spacing: 36) {
-                    VStack(alignment: .leading, spacing: 10) { chips }
-                    dial.padding(.vertical, 26)
-                }
-            } else {
-                VStack(spacing: 26) {
-                    HStack(spacing: 8) { chips }
-                    dial.frame(maxWidth: 330, maxHeight: 330).padding(.horizontal, 20)
-                }
-                .padding(.top, 56)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(EdgeTicks())
-    }
-
-    @ViewBuilder private var chips: some View {
-        chip("volumen", "speaker.wave.2.fill", .volume)
-        chip("brillo", "sun.max.fill", .brightness).disabled(remote.brightness == nil)
-    }
-
-    private var dial: some View {
-        Dial(value: kind == .volume ? remote.volume : (remote.brightness ?? 0),
-             symbol: kind == .volume ? "speaker.wave.2.fill" : "sun.max.fill") { value, phase in
-            switch phase {
-            case .began: remote.editingLevel = true
-            case .changed: remote.setLevel(kind, value, final: false)
-            case .ended:
-                remote.setLevel(kind, value, final: true)
-                remote.editingLevel = false
-            }
-        }
-    }
-
-    private func chip(_ title: String, _ symbol: String, _ k: LevelKind) -> some View {
-        Button {
-            Haptic.tap()
-            withAnimation(.spring(duration: 0.5, bounce: 0.25)) { kind = k }
-        } label: {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(kind == k ? .white : Tone.ink)
-                .padding(.horizontal, 16).padding(.vertical, 9)
-                .background(Capsule().fill(kind == k ? Color.black.opacity(0.85) : Tone.ink.opacity(0.1)))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-struct Dial: View {
-    enum Phase { case began, changed, ended }
-
-    let value: Double
-    let symbol: String
-    let onEdit: (Double, Phase) -> Void
-
-    private let ticks = 49
-    private let start = 135.0, sweep = 270.0
-    @State private var lastTick = -1
-    @State private var dragging = false
-    @State private var bump = 0
-    private let selection = UISelectionFeedbackGenerator()
-
-    var body: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-            let head = Int((value * Double(ticks - 1)).rounded())
-            ZStack {
-                // Arco de luz detrás de las marcas encendidas.
-                Circle()
-                    .trim(from: 0, to: value * sweep / 360)
-                    .stroke(Color.white.opacity(dragging ? 0.7 : 0.45),
-                            style: StrokeStyle(lineWidth: dragging ? 26 : 18, lineCap: .round))
-                    .blur(radius: dragging ? 14 : 10)
-                    .rotationEffect(.degrees(start))
-                    .frame(width: side - 32, height: side - 32)
-                    .animation(.spring(duration: 0.35), value: dragging)
-                ForEach(0..<ticks, id: \.self) { i in
-                    let t = Double(i) / Double(ticks - 1)
-                    let on = t <= value + 0.0001
-                    let isHead = i == head && value > 0
-                    Capsule()
-                        .fill(isHead ? Color.white : (on ? Tone.ink : Tone.ink.opacity(0.2)))
-                        .frame(width: isHead ? 5 : (i % 6 == 0 ? 4 : 3),
-                               height: isHead ? 32 : (i % 6 == 0 ? 24 : 14))
-                        .shadow(color: isHead ? .white : .clear, radius: 6)
-                        .offset(y: -side / 2 + (isHead ? 20 : 16))
-                        .rotationEffect(.degrees(start + sweep * t + 90))
-                }
-                // Marcador: un triángulo que apunta al valor.
-                Image(systemName: "triangle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.black)
-                    .rotationEffect(.degrees(180))
-                    .offset(y: -side / 2 + 48)
-                    .rotationEffect(.degrees(start + sweep * value + 90))
-                Circle()
-                    .fill(.black.opacity(0.88))
-                    .frame(width: side * 0.5, height: side * 0.5)
-                    .shadow(color: dragging ? .white.opacity(0.45) : Tone.ink.opacity(0.4),
-                            radius: dragging ? 22 : 14, y: dragging ? 0 : 8)
-                    .scaleEffect(dragging ? 1.04 : 1)
-                    .boing(bump, amount: 0.025)
-                    .animation(.spring(duration: 0.35, bounce: 0.4), value: dragging)
-                VStack(spacing: 2) {
-                    Image(systemName: symbol).font(.system(size: 16, weight: .semibold))
-                        .contentTransition(.symbolEffect(.replace))
-                    Text("\(Int((value * 100).rounded()))")
-                        .font(.system(size: side * 0.15, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                }
-                .foregroundStyle(.white)
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .contentShape(Circle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { v in
-                        if !dragging { dragging = true; selection.prepare(); onEdit(value, .began) }
-                        onEdit(level(at: v.location, center: center), .changed)
-                    }
-                    .onEnded { v in
-                        dragging = false
-                        onEdit(level(at: v.location, center: center), .ended)
-                    }
-            )
-            .animation(.easeOut(duration: 0.08), value: value)
-        }
-        .aspectRatio(1, contentMode: .fit)
-    }
-
-    /// Ángulo del dedo → 0…1 dentro del arco de 270°. En el hueco de abajo se
-    /// pega al extremo más cercano en vez de saltar de 100 a 0.
-    private func level(at p: CGPoint, center c: CGPoint) -> Double {
-        var angle = atan2(p.y - c.y, p.x - c.x) * 180 / .pi - start
-        while angle < 0 { angle += 360 }
-        while angle >= 360 { angle -= 360 }
-        let t = angle <= sweep ? angle / sweep : (angle < sweep + 45 ? 1 : 0)
-        let tick = Int((t * Double(ticks - 1)).rounded())
-        if tick != lastTick {
-            selection.selectionChanged()
-            lastTick = tick
-            bump += 1
-        }
-        return t
     }
 }
 
@@ -702,177 +387,6 @@ struct FlyState {
     var travel = 0.0
     var opacity = 0.0
     var scale = 1.0
-}
-
-// MARK: - Pad
-
-struct PadPage: View {
-    @EnvironmentObject private var remote: Remote
-    @Environment(\.isLandscape) private var landscape
-    @State private var editing = false
-    @State private var mediaTaps: [MediaKey: Int] = [:]
-    @State private var chipTaps: [UUID: Int] = [:]
-    @State private var typing = false
-    @State private var clipTaps = [0, 0]
-
-    var body: some View {
-        Group {
-            if landscape {
-                // El trackpad se aprovecha a lo ancho, como el de un portátil.
-                HStack(spacing: 14) {
-                    VStack(spacing: 10) {
-                        surface
-                        clickRow
-                    }
-                    VStack(spacing: 12) {
-                        HStack(spacing: 8) { tools }
-                        ScrollView {
-                            VStack(spacing: 8) { shortcutChips }
-                        }
-                        .scrollIndicators(.hidden)
-                    }
-                    .frame(width: 200)
-                }
-                .padding(.top, 40)
-                .padding(.trailing, 6)
-            } else {
-                VStack(spacing: 14) {
-                    surface.padding(.top, 52)
-                    clickRow
-                    HStack(spacing: 12) { tools }
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) { shortcutChips }.padding(.horizontal, 2)
-                    }
-                    .scrollIndicators(.hidden)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
-        .sheet(isPresented: $editing) { ShortcutEditor().environmentObject(remote) }
-        .overlay(alignment: .bottom) {
-            if typing {
-                KeyboardBar(shown: $typing)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-    }
-
-    /// Teclado remoto y portapapeles en los dos sentidos.
-    @ViewBuilder private var tools: some View {
-        tool("keyboard", "teclado", 0) { withAnimation(.spring(duration: 0.4, bounce: 0.25)) { typing = true } }
-        tool("arrow.up.doc.on.clipboard", "al Mac", 1) { remote.pushClipboard() }
-        tool("arrow.down.doc.on.clipboard", "del Mac", 2) { remote.send(.pullClipboard) }
-    }
-
-    private func tool(_ symbol: String, _ title: String, _ i: Int, action: @escaping () -> Void) -> some View {
-        Button {
-            Haptic.tap()
-            if i > 0 { clipTaps[i - 1] += 1 }
-            action()
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
-                    .symbolEffect(.bounce, value: i > 0 ? clipTaps[i - 1] : 0)
-                Text(title).font(.system(size: 10, weight: .semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity).frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.black.opacity(0.85)))
-        }
-        .buttonStyle(PressScale())
-    }
-
-    private var surface: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Tone.ink.opacity(0.1))
-            RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(Tone.ink.opacity(0.2), lineWidth: 1)
-            Trackpad(remote: remote)
-        }
-    }
-
-    // Botones de clic, como los de un portátil: para cuando un toque no es cómodo.
-    private var clickRow: some View {
-        HStack(spacing: 2) {
-            clickButton("clic", .left)
-            clickButton("clic derecho", .right)
-        }
-        .clipShape(Capsule())
-    }
-
-    @ViewBuilder private var mediaButtons: some View {
-        media("backward.fill", .previous)
-        media("playpause.fill", .playPause)
-        media("forward.fill", .next)
-    }
-
-    @ViewBuilder private var shortcutChips: some View {
-        ForEach(remote.shortcuts) { s in
-            Button {
-                Haptic.tap()
-                chipTaps[s.id, default: 0] += 1
-                remote.send(.shortcut(s))
-            } label: {
-                VStack(spacing: 1) {
-                    Text(s.glyphs).font(.system(size: 13, weight: .semibold, design: .rounded))
-                    Text(s.title).font(.system(size: 10, weight: .medium)).opacity(0.7)
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: landscape ? .infinity : nil)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(.black.opacity(0.85)))
-                .overlay {
-                    // Destello que recorre el botón al ejecutar el atajo.
-                    Capsule().fill(.white)
-                        .keyframeAnimator(initialValue: 0.0, trigger: chipTaps[s.id, default: 0]) { v, o in v.opacity(o) } keyframes: { _ in
-                            LinearKeyframe(0.55, duration: 0.05)
-                            CubicKeyframe(0, duration: 0.4)
-                        }
-                        .allowsHitTesting(false)
-                }
-                .boing(chipTaps[s.id, default: 0], amount: 0.08)
-            }
-            .buttonStyle(PressScale())
-        }
-        Button { editing = true } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Tone.ink)
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Tone.ink.opacity(0.12)))
-        }
-    }
-
-    private func clickButton(_ title: String, _ button: MouseButton) -> some View {
-        Button {
-            Haptic.tap()
-            remote.send(.click(button: button))
-        } label: {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(Color.black.opacity(0.82))
-        }
-        .buttonStyle(PressScale())
-    }
-
-    private func media(_ symbol: String, _ key: MediaKey) -> some View {
-        Button {
-            Haptic.tap()
-            mediaTaps[key, default: 0] += 1
-            remote.send(.media(key))
-        } label: {
-            Image(systemName: symbol)
-                .symbolEffect(.bounce, value: mediaTaps[key, default: 0])
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: landscape ? 50 : 56, height: landscape ? 50 : 56)
-                .background(Circle().fill(.black.opacity(0.85)))
-        }
-        .buttonStyle(PressScale())
-    }
 }
 
 /// Superficie táctil con varios dedos. SwiftUI no distingue cuántos dedos hay
@@ -1148,45 +662,6 @@ final class TrackpadSurface: UIView {
 }
 
 // MARK: - Editor de atajos
-
-struct ShortcutEditor: View {
-    @EnvironmentObject private var remote: Remote
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach($remote.shortcuts) { $s in
-                    NavigationLink {
-                        ShortcutForm(shortcut: $s)
-                    } label: {
-                        HStack {
-                            Text(s.title)
-                            Spacer()
-                            Text(s.glyphs).font(.system(.body, design: .rounded)).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .onDelete { remote.shortcuts.remove(atOffsets: $0) }
-                .onMove { remote.shortcuts.move(fromOffsets: $0, toOffset: $1) }
-
-                Button {
-                    remote.shortcuts.append(Shortcut(title: "nuevo atajo", key: "a", command: true))
-                } label: {
-                    Label("Agregar atajo", systemImage: "plus")
-                }
-                Button("Restaurar los de fábrica", role: .destructive) {
-                    remote.shortcuts = Shortcut.defaults
-                }
-            }
-            .navigationTitle("Atajos")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton() }
-                ToolbarItem(placement: .topBarTrailing) { Button("Listo") { dismiss() } }
-            }
-        }
-    }
-}
 
 struct ShortcutForm: View {
     @Binding var shortcut: Shortcut
