@@ -13,8 +13,7 @@ struct ScanPage: View {
     @State private var document = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Space.m) {
+        StageScroll(spacing: Space.m) {
                 option("texto al cursor", "text.viewfinder",
                        "Apunta a una hoja, un libro o una pantalla. Toca un texto y se escribe donde está el cursor del Mac.") {
                     live = true
@@ -23,11 +22,7 @@ struct ScanPage: View {
                        "Fotografía la pizarra, el proyector o tu cuaderno, aunque estés de lado. Llega al Mac enderezado, como PDF con el texto buscable.") {
                     document = true
                 }
-            }
-            .padding(Space.m)
-            .padding(.top, 48)
         }
-        .scrollIndicators(.hidden)
         .fullScreenCover(isPresented: $live) {
             LiveTextScanner { text in
                 Detents.shared.press()
@@ -146,8 +141,7 @@ struct SendPage: View {
     @State private var text = ""
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Space.l) {
+        StageScroll(spacing: Space.l) {
                 Button {
                     Detents.shared.press()
                     importing = true
@@ -204,11 +198,7 @@ struct SendPage: View {
                     .disabled(text.isEmpty)
                     .opacity(text.isEmpty ? 0.5 : 1)
                 }
-            }
-            .padding(Space.m)
-            .padding(.top, 48)
         }
-        .scrollIndicators(.hidden)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             for url in urls {

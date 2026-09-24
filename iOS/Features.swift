@@ -13,14 +13,13 @@ struct LaserPage: View {
     private let motion = CMMotionManager()
 
     var body: some View {
-        VStack(spacing: 26) {
-            Spacer()
+        StagePage { side in
             ZStack {
                 Circle().fill(Color(red: 1, green: 0.35, blue: 0.15).opacity(aiming ? 0.45 : 0.12))
-                    .frame(width: 220, height: 220)
+                    .frame(width: side * 0.85, height: side * 0.85)
                     .blur(radius: aiming ? 30 : 10)
                     .scaleEffect(aiming ? 1.15 : 0.9)
-                Circle().fill(Tone.key).frame(width: 170, height: 170)
+                Circle().fill(Tone.key).frame(width: side * 0.66, height: side * 0.66)
                 VStack(spacing: 6) {
                     Image(systemName: "light.beacon.max.fill")
                         .font(.system(size: 38, weight: .semibold))
@@ -30,19 +29,18 @@ struct LaserPage: View {
                 }
                 .foregroundStyle(.white)
             }
+            .frame(width: side, height: side)
+            .contentShape(Circle())
             .animation(.spring(duration: 0.4, bounce: 0.3), value: aiming)
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { _ in if !aiming { start() } }
                 .onEnded { _ in stop() })
-
-            HStack(spacing: 18) {
+        } controls: {
+            HStack(spacing: Space.s) {
                 slideButton("chevron.left", "anterior", "left")
                 slideButton("chevron.right", "siguiente", "right")
             }
-            Text("Apunta el iPhone hacia la pantalla. Las flechas pasan diapositivas en Keynote, PowerPoint o el navegador.")
-                .font(.footnote).multilineTextAlignment(.center)
-                .foregroundStyle(Tone.ink.opacity(0.6)).padding(.horizontal, 30)
-            Spacer()
+            Hint("Apunta el iPhone hacia la pantalla. Las flechas pasan diapositivas en Keynote, PowerPoint o el navegador.")
         }
         .onDisappear { stop() }
     }
@@ -56,7 +54,7 @@ struct LaserPage: View {
             Label(title, systemImage: symbol)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 150, height: 58)
+                .frame(maxWidth: .infinity).frame(height: 58)
                 .background(Capsule().fill(Tone.key))
         }
         .buttonStyle(PressScale())
@@ -93,18 +91,15 @@ struct PowerPage: View {
     @State private var confirm: PowerAction?
 
     var body: some View {
-        VStack(spacing: 14) {
-            Spacer()
-            row("bloquear", "el Mac pide contraseña al volver", "lock.fill") { confirm = .lock }
-            row("apagar la pantalla", "el Mac sigue encendido", "display") { remote.send(.power(.displayOff)) }
-            row("suspender", "se desconecta hasta que lo despiertes", "moon.zzz.fill") { confirm = .sleep }
-            row("despertar", "si está en reposo en la misma red", "sunrise.fill") { remote.wake() }
-            Text("Despertar funciona si el Mac tiene \"Activar con acceso a la red\" y en casa hay un HomePod o un Apple TV: ellos lo despiertan cuando el iPhone lo busca.")
-                .font(.footnote).multilineTextAlignment(.center)
-                .foregroundStyle(Tone.ink.opacity(0.6)).padding(.horizontal, 26).padding(.top, 6)
-            Spacer()
+        StageScroll(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 12)], spacing: 12) {
+                row("bloquear", "el Mac pide contraseña al volver", "lock.fill") { confirm = .lock }
+                row("apagar la pantalla", "el Mac sigue encendido", "display") { remote.send(.power(.displayOff)) }
+                row("suspender", "se desconecta hasta que lo despiertes", "moon.zzz.fill") { confirm = .sleep }
+                row("despertar", "si está en reposo en la misma red", "sunrise.fill") { remote.wake() }
+            }
+            Hint("Despertar funciona si el Mac tiene \"Activar con acceso a la red\" y en casa hay un HomePod o un Apple TV: ellos lo despiertan cuando el iPhone lo busca.")
         }
-        .padding(.horizontal, 20)
         .confirmationDialog(confirm == .sleep ? "¿Suspender el Mac?" : "¿Bloquear el Mac?",
                             isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }),
                             titleVisibility: .visible) {
@@ -132,7 +127,7 @@ struct PowerPage: View {
                 Spacer()
             }
             .padding(12)
-            .frame(maxWidth: 480)
+            .frame(maxWidth: .infinity)
             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
         }
         .buttonStyle(PressScale())

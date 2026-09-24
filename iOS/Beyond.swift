@@ -10,7 +10,7 @@ struct DetachPage: View {
     @State private var open: WindowInfo?
 
     var body: some View {
-        ScrollView {
+        StageScroll {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Space.s)], spacing: Space.s) {
                 ForEach(remote.windows.filter { !$0.minimized }) { w in
                     Button {
@@ -36,14 +36,10 @@ struct DetachPage: View {
                     .buttonStyle(PressScale())
                 }
             }
-            .padding(Space.m)
-            .padding(.top, 48)
             if remote.windows.isEmpty {
-                Text("sin ventanas, o falta el permiso de Accesibilidad en el Mac")
-                    .font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.5)).padding(Space.xl)
+                Hint("sin ventanas, o falta el permiso de Accesibilidad en el Mac")
             }
         }
-        .scrollIndicators(.hidden)
         .task { remote.send(.listWindows) }
         .fullScreenCover(item: $open) { w in DetachedWindow(window: w) }
     }
@@ -112,26 +108,36 @@ struct MixerPage: View {
     @EnvironmentObject private var remote: Remote
 
     var body: some View {
-        VStack(spacing: Space.m) {
-            if remote.mixerApps.isEmpty {
-                Spacer()
-                Image(systemName: "slider.vertical.3").font(.system(size: 56, weight: .light)).foregroundStyle(Tone.ember)
-                Text("ninguna app está sonando en el Mac").font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
-                Spacer()
-            } else {
-                ScrollView(.horizontal) {
-                    HStack(alignment: .bottom, spacing: Space.m) {
-                        ForEach(remote.mixerApps) { app in Fader(app: app) }
+        GeometryReader { geo in
+            let wide = StageMetrics.wide(geo.size)
+            let edge = wide ? StageMetrics.edgeWide : StageMetrics.edge
+            // Los faders crecen con el escenario; lo demás (número, nombre, silencio) mide ~150.
+            let fader = max(120, min(300, geo.size.height - edge * 2 - (wide ? 150 : 200)))
+            VStack(spacing: Space.m) {
+                if remote.mixerApps.isEmpty {
+                    Spacer()
+                    Image(systemName: "slider.vertical.3").font(.system(size: 56, weight: .light)).foregroundStyle(Tone.ember)
+                    Text("ninguna app está sonando en el Mac").font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
+                    Spacer()
+                } else {
+                    Spacer(minLength: 0)
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .bottom, spacing: Space.m) {
+                            ForEach(remote.mixerApps) { app in Fader(app: app, height: fader) }
+                        }
+                        .padding(.horizontal, Space.m)
+                        .frame(minWidth: geo.size.width)
                     }
-                    .padding(.horizontal, Space.m)
-                    .frame(minWidth: UIScreen.main.bounds.width)
+                    .scrollIndicators(.hidden)
+                    Spacer(minLength: 0)
                 }
-                .scrollIndicators(.hidden)
-                .padding(.top, 56)
+                if !wide {
+                    Hint("Cada app suena con su propio volumen; el volumen general sigue en la perilla. La primera vez, el Mac pide permiso para tomar el audio de las apps.")
+                        .padding(.horizontal, Space.m)
+                }
             }
-            Text("Cada app suena con su propio volumen; el volumen general sigue en la perilla. La primera vez, el Mac pide permiso para tomar el audio de las apps.")
-                .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.45)).multilineTextAlignment(.center)
-                .padding(.horizontal, Space.m).padding(.bottom, Space.m)
+            .padding(.vertical, edge)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .task {
             while !Task.isCancelled {
@@ -147,7 +153,7 @@ private struct Fader: View {
     let app: MixerApp
     @State private var value: Double?
     @State private var lastSend = Date.distantPast
-    private let height: CGFloat = 300
+    var height: CGFloat = 300
 
     var body: some View {
         let v = value ?? app.gain
@@ -318,8 +324,7 @@ struct GazePage: View {
     @AppStorage("gaze.mirrored") private var mirrored = false
 
     var body: some View {
-        VStack(spacing: Space.l) {
-            Spacer(minLength: 40)
+        StagePage { side in
             // Un Mac en miniatura con el punto donde miras.
             GeometryReader { geo in
                 ZStack {
@@ -335,12 +340,13 @@ struct GazePage: View {
                             Text("mira al centro de la pantalla del Mac").font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundStyle(Tone.ink.opacity(0.8))
+                    } else if !gaze.running {
+                        Image(systemName: "eye").font(.system(size: 34, weight: .light)).foregroundStyle(Tone.ember)
                     }
                 }
             }
-            .aspectRatio(16 / 10, contentMode: .fit)
-            .padding(.horizontal, Space.m)
-
+            .frame(width: side * 1.25, height: side * 1.25 * 10 / 16)
+        } controls: {
             if !GazeTracker.supported {
                 Text("Este iPhone no tiene cámara TrueDepth (Face ID).")
                     .font(.system(size: 14)).foregroundStyle(Tone.ember)
@@ -363,11 +369,8 @@ struct GazePage: View {
                     .foregroundStyle(Tone.ink.opacity(0.6))
                 }
             }
-            Text("Apoya el iPhone bajo la pantalla del Mac, mirándote. Guiña un ojo para hacer clic.")
-                .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.45)).multilineTextAlignment(.center)
-            Spacer()
+            Hint("Apoya el iPhone bajo la pantalla del Mac, mirándote. Guiña un ojo para hacer clic.")
         }
-        .padding(Space.m)
         .onAppear {
             gaze.reach = reach
             gaze.mirrored = mirrored

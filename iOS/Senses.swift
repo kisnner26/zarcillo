@@ -252,14 +252,13 @@ struct CallLightPage: View {
     @State private var manual = false
 
     var body: some View {
-        VStack(spacing: Space.l) {
-            Spacer()
+        StagePage { side in
             Button {
                 Detents.shared.press()
                 manual = true
             } label: {
                 ZStack {
-                    Circle().fill(Color(red: 1, green: 0.88, blue: 0.7)).frame(width: 130, height: 130)
+                    Circle().fill(Color(red: 1, green: 0.88, blue: 0.7)).frame(width: side * 0.6, height: side * 0.6)
                         .shadow(color: Color(red: 1, green: 0.85, blue: 0.6).opacity(0.7), radius: 30)
                     VStack(spacing: 4) {
                         Image(systemName: "light.max").font(.system(size: 32, weight: .semibold))
@@ -267,23 +266,13 @@ struct CallLightPage: View {
                     }
                     .foregroundStyle(.black.opacity(0.7))
                 }
+                .frame(width: side, height: side)
             }
             .buttonStyle(PressScale())
-            Toggle(isOn: $auto) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("encender sola en videollamadas").font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
-                    Text("cuando una app use la cámara del Mac")
-                        .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
-                }
-            }
-            .tint(Tone.ember)
-            .padding(.horizontal, Space.m).frame(height: 64)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
-            Text("Apoya el iPhone detrás del Mac, mirándote. Su pantalla hará de luz suave.")
-                .font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.5)).multilineTextAlignment(.center)
-            Spacer()
+        } controls: {
+            ToggleCard(title: "encender sola en videollamadas", detail: "cuando otra app use la cámara del Mac", isOn: $auto)
+            Hint("Apoya el iPhone detrás del Mac, mirándote. Su pantalla hará de luz suave.")
         }
-        .padding(Space.m)
         .fullScreenCover(isPresented: $manual) { CallLight(shown: $manual) }
     }
 }
@@ -293,17 +282,21 @@ struct CallLightPage: View {
 struct PosturePage: View {
     @EnvironmentObject private var remote: Remote
 
+    private var tint: Color { remote.postureOn ? (remote.slouching ? Tone.ember : Tone.leaf) : Tone.ink.opacity(0.4) }
+
     var body: some View {
-        VStack(spacing: Space.l) {
-            Spacer()
+        StagePage { side in
             ZStack {
-                Circle().fill(remote.postureOn ? (remote.slouching ? Tone.ember : Tone.leaf).opacity(0.25) : .clear)
-                    .frame(width: 180, height: 180).blur(radius: 20)
+                Circle().fill(remote.postureOn ? tint.opacity(0.25) : .clear)
+                    .frame(width: side * 0.75, height: side * 0.75).blur(radius: 20)
+                Circle().stroke(tint.opacity(0.35), lineWidth: 1).frame(width: side * 0.62, height: side * 0.62)
                 Image(systemName: remote.slouching ? "figure.fall" : "figure.stand")
-                    .font(.system(size: 64, weight: .semibold))
-                    .foregroundStyle(remote.postureOn ? (remote.slouching ? Tone.ember : Tone.leaf) : Tone.ink.opacity(0.4))
+                    .font(.system(size: side * 0.26, weight: .semibold))
+                    .foregroundStyle(tint)
                     .contentTransition(.symbolEffect(.replace))
             }
+            .frame(width: side, height: side)
+        } controls: {
             Text(!remote.postureOn ? "apagado" : (remote.slouching ? "te estás encorvando" : "buena postura"))
                 .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
             WideButton(title: remote.postureOn ? "dejar de vigilar" : "vigilar mi postura",
@@ -311,11 +304,8 @@ struct PosturePage: View {
                        filled: !remote.postureOn) {
                 remote.send(.posture(!remote.postureOn))
             }
-            Text("Usa la cámara del Mac dos veces por segundo, en baja resolución, sin guardar imágenes. Los primeros segundos siéntate derecho: es tu referencia. Si pasas un minuto encorvado, el Mac te avisa.")
-                .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.45)).multilineTextAlignment(.center)
-            Spacer()
+            Hint("Usa la cámara del Mac dos veces por segundo, en baja resolución, sin guardar imágenes. Los primeros segundos siéntate derecho: es tu referencia. Si pasas un minuto encorvado, el Mac te avisa.")
         }
-        .padding(Space.m)
         .animation(.spring(duration: 0.4), value: remote.slouching)
     }
 }

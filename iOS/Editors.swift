@@ -687,9 +687,8 @@ struct TouchBarPage: View {
     @EnvironmentObject private var remote: Remote
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Space.l) {
-                preview.padding(.top, 56)
+        StageScroll(spacing: Space.l) {
+                preview
                 HStack(spacing: Space.s) {
                     WideButton(title: "mostrar", symbol: "rectangle.split.3x1.fill") { remote.send(.touchBarShow(true)) }
                     WideButton(title: "ocultar", symbol: "xmark", filled: false) { remote.send(.touchBarShow(false)) }
@@ -707,10 +706,7 @@ struct TouchBarPage: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Tone.ink.opacity(0.55))
                 .frame(height: 44)
-            }
-            .padding(Space.m)
         }
-        .scrollIndicators(.hidden)
     }
 
     /// La Touch Bar en miniatura, tal como se verá.

@@ -145,70 +145,54 @@ struct GuardianPage: View {
     @State private var pulse = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Space.l) {
-                Button {
-                    Detents.shared.press()
-                    remote.setGuardian(!remote.guardianOn)
-                } label: {
-                    ZStack {
-                        Circle().fill(Tone.ember.opacity(remote.guardianOn ? 0.28 : 0))
-                            .frame(width: pulse ? 210 : 170, height: pulse ? 210 : 170).blur(radius: 22)
-                        Circle().fill(remote.guardianOn ? Tone.ember : Tone.key)
-                            .frame(width: 140, height: 140)
-                            .overlay(Circle().stroke(Tone.stroke, lineWidth: remote.guardianOn ? 0 : 1))
-                        VStack(spacing: 6) {
-                            Image(systemName: remote.guardianOn ? "lock.shield.fill" : "shield")
-                                .font(.system(size: 40, weight: .semibold))
-                                .contentTransition(.symbolEffect(.replace))
-                            Text(remote.guardianOn ? "vigilando" : "activar").font(.system(size: 13, weight: .bold))
-                        }
-                        .foregroundStyle(remote.guardianOn ? Tone.onEmber : Tone.ink.opacity(0.8))
+        StagePage { side in
+            Button {
+                Detents.shared.press()
+                remote.setGuardian(!remote.guardianOn)
+            } label: {
+                ZStack {
+                    Circle().fill(Tone.ember.opacity(remote.guardianOn ? 0.28 : 0))
+                        .frame(width: side * (pulse ? 0.92 : 0.76), height: side * (pulse ? 0.92 : 0.76)).blur(radius: 22)
+                    Circle().fill(remote.guardianOn ? Tone.ember : Tone.key)
+                        .frame(width: side * 0.62, height: side * 0.62)
+                        .overlay(Circle().stroke(Tone.stroke, lineWidth: remote.guardianOn ? 0 : 1))
+                    VStack(spacing: 6) {
+                        Image(systemName: remote.guardianOn ? "lock.shield.fill" : "shield")
+                            .font(.system(size: 40, weight: .semibold))
+                            .contentTransition(.symbolEffect(.replace))
+                        Text(remote.guardianOn ? "vigilando" : "activar").font(.system(size: 13, weight: .bold))
                     }
-                    .frame(height: 220)
+                    .foregroundStyle(remote.guardianOn ? Tone.onEmber : Tone.ink.opacity(0.8))
                 }
-                .buttonStyle(PressScale())
-                .padding(.top, 40)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { pulse = true }
-                }
-
-                Toggle(isOn: Binding(get: { remote.guardianSiren }, set: { remote.setGuardian(remote.guardianOn, siren: $0) })) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("que el Mac también suene").font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
-                        Text("sirena al máximo volumen hasta que la silencies")
-                            .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
-                    }
-                }
-                .tint(Tone.ember)
-                .padding(.horizontal, Space.m).frame(height: 64)
-                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
-
-                Text("Avisa si alguien toca el teclado o el trackpad, desenchufa el cargador, despierta la pantalla o cierra la tapa, con una foto de la cámara del Mac. Deja Zarcillo abierto o en segundo plano: el iPhone suena aunque esté bloqueado.")
-                    .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.45)).multilineTextAlignment(.center)
-
-                ForEach(remote.alarms.reversed()) { a in
-                    HStack(spacing: Space.s) {
-                        if let p = a.photo {
-                            Image(uiImage: p).resizable().scaledToFill().frame(width: 56, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        } else {
-                            Image(systemName: "exclamationmark.shield.fill").font(.system(size: 22))
-                                .foregroundStyle(Tone.ember).frame(width: 56, height: 56)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(a.reason).font(.system(size: 14, weight: .semibold)).foregroundStyle(Tone.ink)
-                            Text(a.at, style: .time).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
-                        }
-                        Spacer()
-                    }
-                    .padding(Space.s)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
-                }
+                .frame(width: side, height: side)
             }
-            .padding(Space.m)
+            .buttonStyle(PressScale())
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { pulse = true }
+            }
+        } controls: {
+            ToggleCard(title: "que el Mac también suene", detail: "sirena al máximo volumen hasta que la silencies",
+                       isOn: Binding(get: { remote.guardianSiren }, set: { remote.setGuardian(remote.guardianOn, siren: $0) }))
+            Hint("Avisa si alguien toca el teclado o el trackpad, desenchufa el cargador, despierta la pantalla o cierra la tapa, con una foto de la cámara del Mac. El iPhone suena aunque esté bloqueado.")
+            ForEach(remote.alarms.reversed()) { a in
+                HStack(spacing: Space.s) {
+                    if let p = a.photo {
+                        Image(uiImage: p).resizable().scaledToFill().frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } else {
+                        Image(systemName: "exclamationmark.shield.fill").font(.system(size: 22))
+                            .foregroundStyle(Tone.ember).frame(width: 56, height: 56)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(a.reason).font(.system(size: 14, weight: .semibold)).foregroundStyle(Tone.ink)
+                        Text(a.at, style: .time).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
+                    }
+                    Spacer()
+                }
+                .padding(Space.s)
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+            }
         }
-        .scrollIndicators(.hidden)
         .animation(.spring(duration: 0.4), value: remote.guardianOn)
     }
 }
@@ -254,9 +238,9 @@ struct NearPage: View {
     @EnvironmentObject private var remote: Remote
 
     var body: some View {
-        VStack(spacing: Space.l) {
-            Spacer(minLength: 40)
-            radar
+        StagePage { side in
+            radar(side)
+        } controls: {
             Text(status).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
                 .contentTransition(.numericText())
             WideButton(title: remote.nearOn ? "desactivar" : "bloquear al alejarme",
@@ -264,30 +248,25 @@ struct NearPage: View {
                 remote.setNear(!remote.nearOn, threshold: remote.nearThreshold)
             }
             if remote.nearOn {
-                VStack(spacing: Space.s) {
-                    HStack {
-                        Text("cerca").font(.system(size: 12, weight: .semibold))
-                        Slider(value: Binding(get: { Double(-remote.nearThreshold) },
-                                              set: { remote.setNear(true, threshold: -Int($0)) }),
-                               in: 50...95, step: 1)
-                            .tint(Tone.ember)
-                        Text("lejos").font(.system(size: 12, weight: .semibold))
+                HStack {
+                    Text("cerca").font(.system(size: 12, weight: .semibold))
+                    Slider(value: Binding(get: { Double(-remote.nearThreshold) },
+                                          set: { remote.setNear(true, threshold: -Int($0)) }),
+                           in: 50...95, step: 1)
+                        .tint(Tone.ember)
+                    Text("lejos").font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(Tone.ink.opacity(0.6))
+                if let r = remote.nearRSSI {
+                    Button("bloquear desde donde estoy ahora") {
+                        Detents.shared.press()
+                        remote.setNear(true, threshold: r - 2)
                     }
-                    .foregroundStyle(Tone.ink.opacity(0.6))
-                    if let r = remote.nearRSSI {
-                        Button("bloquear desde donde estoy ahora") {
-                            Detents.shared.press()
-                            remote.setNear(true, threshold: r - 2)
-                        }
-                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Tone.ember).frame(height: 44)
-                    }
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Tone.ember).frame(height: 44)
                 }
             }
-            Text("El Mac mide la señal Bluetooth de este iPhone. Si te alejas más de la raya, se bloquea; al volver se enciende la pantalla, lista para Touch ID.")
-                .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.45)).multilineTextAlignment(.center)
-            Spacer()
+            Hint("El Mac mide la señal Bluetooth de este iPhone. Si te alejas más de la raya, se bloquea; al volver se enciende la pantalla, lista para Touch ID.")
         }
-        .padding(Space.m)
         .animation(.spring(duration: 0.5), value: remote.nearRSSI)
     }
 
@@ -300,8 +279,7 @@ struct NearPage: View {
 
     /// Anillos: el Mac al centro, tú como una hoja a la distancia de la señal
     /// y la raya del acento donde se bloquea.
-    private var radar: some View {
-        let size: CGFloat = 230
+    private func radar(_ size: CGFloat) -> some View {
         func radius(_ dbm: Int) -> CGFloat {
             let t = CGFloat(min(95, max(40, -dbm)) - 40) / 55
             return 24 + t * (size / 2 - 30)
@@ -329,40 +307,40 @@ struct GuestPage: View {
     @EnvironmentObject private var remote: Remote
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Space.l) {
+        StagePage { side in
+            Group {
                 if let url = remote.guestURL, let qr = QR.image(url) {
                     Image(uiImage: qr).interpolation(.none).resizable().scaledToFit()
-                        .padding(18)
+                        .padding(side * 0.07)
                         .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Tone.ink))
-                        .frame(maxWidth: 280)
                         .shadow(color: Tone.ember.opacity(0.35), radius: 24)
-                        .padding(.top, 40)
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
-                    Text("que tu amigo lo escanee con la cámara").font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Tone.ink)
-                    if let exp = remote.guestExpires {
-                        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                            let left = max(0, Int(exp.timeIntervalSince(ctx.date)))
-                            Text("se marchita en \(left / 60):\(String(format: "%02d", left % 60))")
-                                .font(.system(size: 13, weight: .medium).monospacedDigit())
-                                .foregroundStyle(Tone.ink.opacity(0.5))
-                        }
-                    }
-                    WideButton(title: "cerrar", symbol: "xmark", filled: false) { remote.send(.guest(false)) }
                 } else {
-                    Image(systemName: "qrcode").font(.system(size: 80, weight: .light))
-                        .foregroundStyle(Tone.ember).padding(.top, 60)
-                    Text("Un amigo lanza fotos a tu Mac desde su teléfono, sin instalar nada.")
-                        .font(.system(size: 16, weight: .semibold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
-                    WideButton(title: "abrir brote invitado", symbol: "leaf.fill") { remote.send(.guest(true)) }
+                    Image(systemName: "qrcode").font(.system(size: side * 0.36, weight: .light))
+                        .foregroundStyle(Tone.ember)
                 }
-                Text("Debe estar en la misma Wi-Fi. El enlace solo acepta fotos y caduca en una hora.")
-                    .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.45)).multilineTextAlignment(.center)
             }
-            .padding(Space.m)
+            .frame(width: side, height: side)
+        } controls: {
+            if remote.guestURL != nil {
+                Text("que tu amigo lo escanee con la cámara").font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Tone.ink).multilineTextAlignment(.center)
+                if let exp = remote.guestExpires {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        let left = max(0, Int(exp.timeIntervalSince(ctx.date)))
+                        Text("se marchita en \(left / 60):\(String(format: "%02d", left % 60))")
+                            .font(.system(size: 13, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Tone.ink.opacity(0.5))
+                    }
+                }
+                WideButton(title: "cerrar", symbol: "xmark", filled: false) { remote.send(.guest(false)) }
+            } else {
+                Text("Un amigo lanza fotos a tu Mac desde su teléfono, sin instalar nada.")
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
+                WideButton(title: "abrir brote invitado", symbol: "leaf.fill") { remote.send(.guest(true)) }
+            }
+            Hint("Debe estar en la misma Wi-Fi. El enlace solo acepta fotos y caduca en una hora.")
         }
-        .scrollIndicators(.hidden)
         .animation(.spring(duration: 0.5, bounce: 0.3), value: remote.guestURL)
     }
 }

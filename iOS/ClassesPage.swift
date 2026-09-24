@@ -21,47 +21,46 @@ struct ClassesPage: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Space.l) {
-                TextField("materia (Ingeniería de Software II…)", text: $title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Tone.ink)
-                    .padding(.horizontal, 16).frame(height: 52)
-                    .background(Capsule().fill(Tone.key))
-                    .disabled(speech.running)
-                    .padding(.top, 48)
-
-                HStack(spacing: Space.s) {
-                    chip("en español", on: !english) { english = false }
-                    chip("en inglés → español", on: english) { english = true }
-                }
+        StagePage { side in
+            orb(side)
+        } controls: {
+            TextField("materia (Ingeniería de Software II…)", text: $title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(Tone.ink)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16).frame(height: 52)
+                .background(Capsule().fill(Tone.key))
                 .disabled(speech.running)
 
-                orb
+            HStack(spacing: Space.s) {
+                chip("en español", on: !english) { english = false }
+                chip("en inglés → español", on: english) { english = true }
+            }
+            .disabled(speech.running)
 
-                if speech.running {
-                    Button {
-                        Detents.shared.press()
-                        mark()
-                    } label: {
-                        Label(marks == 0 ? "marcar este momento" : "marcado \(marks) \(marks == 1 ? "vez" : "veces")",
-                              systemImage: "star.fill")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundStyle(Tone.ember)
-                            .symbolEffect(.bounce, value: marks)
-                            .frame(maxWidth: .infinity).frame(height: 52)
-                            .background(Capsule().fill(Tone.key))
-                    }
-                    .buttonStyle(PressScale())
-                    Text("también puedes tocar la perilla para marcar")
-                        .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.4))
+            if speech.running {
+                Button {
+                    Detents.shared.press()
+                    mark()
+                } label: {
+                    Label(marks == 0 ? "marcar este momento" : "marcado \(marks) \(marks == 1 ? "vez" : "veces")",
+                          systemImage: "star.fill")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(Tone.ember)
+                        .symbolEffect(.bounce, value: marks)
+                        .frame(maxWidth: .infinity).frame(height: 52)
+                        .background(Capsule().fill(Tone.key))
                 }
+                .buttonStyle(PressScale())
+                Hint("también puedes tocar la perilla para marcar")
+            }
 
-                if speech.denied {
-                    Text("Dale a Zarcillo permiso de micrófono y de reconocimiento de voz en Ajustes.")
-                        .font(.system(size: 13)).foregroundStyle(Tone.ember).multilineTextAlignment(.center)
-                }
+            if speech.denied {
+                Text("Dale a Zarcillo permiso de micrófono y de reconocimiento de voz en Ajustes.")
+                    .font(.system(size: 13)).foregroundStyle(Tone.ember).multilineTextAlignment(.center)
+            }
 
+            if !speech.partial.isEmpty || !lines.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     if !speech.partial.isEmpty {
                         Text(speech.partial).font(.system(size: 16, weight: .medium)).foregroundStyle(Tone.ink)
@@ -72,9 +71,7 @@ struct ClassesPage: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(Space.m)
         }
-        .scrollIndicators(.hidden)
         .translationTask(translation) { session in
             for await text in queue.stream {
                 let translated = (try? await session.translate(text))?.targetText
@@ -86,17 +83,17 @@ struct ClassesPage: View {
     }
 
     /// El botón grande: grabar o terminar, con el nivel de la voz latiendo.
-    private var orb: some View {
+    private func orb(_ side: CGFloat) -> some View {
         Button {
             Detents.shared.press()
             speech.running ? stopClass() : startClass()
         } label: {
             ZStack {
                 Circle().fill(Tone.ember.opacity(speech.running ? 0.3 : 0))
-                    .frame(width: 180 + speech.level * 60, height: 180 + speech.level * 60)
+                    .frame(width: side * (0.75 + speech.level * 0.25), height: side * (0.75 + speech.level * 0.25))
                     .blur(radius: 24)
                 Circle().fill(speech.running ? Tone.ember : Tone.key)
-                    .frame(width: 130, height: 130)
+                    .frame(width: side * 0.56, height: side * 0.56)
                     .overlay(Circle().stroke(Tone.stroke, lineWidth: speech.running ? 0 : 1))
                 VStack(spacing: 4) {
                     Image(systemName: speech.running ? "stop.fill" : "waveform")
@@ -106,7 +103,7 @@ struct ClassesPage: View {
                 }
                 .foregroundStyle(speech.running ? Tone.onEmber : Tone.ink.opacity(0.8))
             }
-            .frame(height: 200)
+            .frame(width: side, height: side)
             .animation(.easeOut(duration: 0.12), value: speech.level)
         }
         .buttonStyle(PressScale())

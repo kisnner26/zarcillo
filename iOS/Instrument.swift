@@ -135,10 +135,52 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     }
 }
 
+/// Las funciones de "más", agrupadas por lo que hacen.
+enum MoreGroup: Int, CaseIterable, Identifiable {
+    case mac, send, ambience, security, custom
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .mac: "controlar el Mac"
+        case .send: "enviar y capturar"
+        case .ambience: "ambiente"
+        case .security: "seguridad"
+        case .custom: "personalizar"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .mac: "laptopcomputer"
+        case .send: "arrow.up.forward.app"
+        case .ambience: "sparkles"
+        case .security: "lock.shield"
+        case .custom: "slider.horizontal.3"
+        }
+    }
+
+    var items: [MoreItem] {
+        switch self {
+        case .mac: [.detach, .mixer, .compass, .gaze, .laser, .gestures, .power, .brightness]
+        case .send: [.photos, .send, .scan, .classes]
+        case .ambience: [.lights, .callLight, .posture]
+        case .security: [.guardian, .near, .guest]
+        case .custom: [.routines, .shortcuts, .touchBar, .color]
+        }
+    }
+}
+
 extension MoreItem {
-    /// Las opciones que tienen sentido para este Mac (sin Touch Bar, no se ofrece).
+    /// Las opciones que tienen sentido para este Mac (sin Touch Bar, no se
+    /// ofrece), en el orden de sus grupos: así la perilla las recorre igual
+    /// que se ven.
     static func visible(touchBar: Bool) -> [MoreItem] {
-        allCases.filter { $0 != .touchBar || touchBar }
+        MoreGroup.allCases.flatMap(\.items).filter { $0 != .touchBar || touchBar }
+    }
+
+    static func groups(touchBar: Bool) -> [(group: MoreGroup, items: [MoreItem])] {
+        MoreGroup.allCases.map { g in (g, g.items.filter { $0 != .touchBar || touchBar }) }.filter { !$0.items.isEmpty }
     }
 }
 
@@ -994,41 +1036,74 @@ struct MoreStage: View {
     }
 
     private var stem: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(MoreItem.visible(touchBar: remote.hasTouchBar).enumerated()), id: \.element) { index, item in
-                    let selected = index == deck.moreIndex
-                    Button {
-                        Haptic.tap()
-                        deck.moreIndex = index
-                        withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
-                    } label: {
-                        HStack(spacing: 14) {
-                            ZStack {
-                                // El tallo pasa por detrás de cada nudo.
-                                Rectangle().fill(Tone.ink.opacity(0.2)).frame(width: 3)
-                                Circle().fill(selected ? Tone.ember : Tone.key).frame(width: 44, height: 44)
-                                    .overlay(Circle().stroke(Tone.stroke, lineWidth: selected ? 0 : 1))
-                                Image(systemName: item.symbol).font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(selected ? Tone.onEmber : Tone.ink.opacity(0.75))
+        let all = MoreItem.visible(touchBar: remote.hasTouchBar)
+        return GeometryReader { geo in
+            let wide = StageMetrics.wide(geo.size)
+            let columns = [GridItem(.adaptive(minimum: wide ? 170 : 150), spacing: Space.s)]
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Space.l) {
+                        ForEach(MoreItem.groups(touchBar: remote.hasTouchBar), id: \.group) { section in
+                            VStack(alignment: .leading, spacing: Space.s) {
+                                Label(section.group.title, systemImage: section.group.symbol)
+                                    .font(.system(size: 11, weight: .bold))
+                                    .textCase(.uppercase)
+                                    .tracking(1.2)
+                                    .foregroundStyle(Tone.ink.opacity(0.45))
+                                    .padding(.leading, 4)
+                                LazyVGrid(columns: columns, spacing: Space.s) {
+                                    ForEach(section.items) { item in
+                                        tile(item, index: all.firstIndex(of: item) ?? 0).id(item)
+                                    }
+                                }
                             }
-                            .frame(width: 44, height: 68)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.title).font(.system(size: 17, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(selected ? Tone.ember : Tone.ink)
-                                Text(item.detail).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
-                            }
-                            Spacer()
                         }
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .animation(.spring(duration: 0.3), value: selected)
+                    .frame(maxWidth: wide ? 760 : 560)
+                    .padding(.horizontal, wide ? Space.l : Space.m)
+                    .padding(.vertical, Space.m)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollIndicators(.hidden)
+                // Al girar la perilla, la opción elegida siempre queda a la vista.
+                .onChange(of: deck.moreIndex) { _, i in
+                    guard all.indices.contains(i) else { return }
+                    withAnimation(.spring(duration: 0.35)) { proxy.scrollTo(all[i], anchor: .center) }
                 }
             }
-            .padding(.horizontal, Space.l).padding(.vertical, Space.m)
         }
-        .scrollIndicators(.hidden)
+    }
+
+    private func tile(_ item: MoreItem, index: Int) -> some View {
+        let selected = index == deck.moreIndex
+        return Button {
+            Haptic.tap()
+            deck.moreIndex = index
+            withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: item.symbol).font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(selected ? Tone.onEmber : Tone.ink.opacity(0.8))
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(selected ? Tone.ember : Tone.recess))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title).font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(selected ? Tone.ember : Tone.ink)
+                        .lineLimit(1)
+                    Text(item.detail).font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.5))
+                        .lineLimit(2, reservesSpace: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(selected ? Tone.ember.opacity(0.7) : Tone.stroke, lineWidth: selected ? 1.5 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale())
+        .animation(.spring(duration: 0.3), value: selected)
     }
 
     @ViewBuilder private func page(_ item: MoreItem) -> some View {
@@ -1135,8 +1210,9 @@ struct DeckStage: View {
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(Tone.ink.opacity(0.6))
                     .contentTransition(.opacity)
-                Spacer()
+                    .lineLimit(1)
             }
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, Space.m).padding(.top, Space.m)
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {

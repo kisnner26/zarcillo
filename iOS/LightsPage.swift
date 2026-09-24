@@ -6,9 +6,8 @@ struct LightsPage: View {
     @State private var scanning = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Space.l) {
-                orb.padding(.top, 56)
+        StageScroll(spacing: Space.l) {
+                orb
 
                 if !remote.lights.isEmpty {
                     VStack(spacing: Space.s) {
@@ -52,10 +51,7 @@ struct LightsPage: View {
                     }
                     .buttonStyle(PressScale())
                 }
-            }
-            .padding(Space.m)
         }
-        .scrollIndicators(.hidden)
         .onAppear { remote.send(.lightsScan) }
     }
 
