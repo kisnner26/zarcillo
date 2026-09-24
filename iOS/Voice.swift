@@ -50,6 +50,14 @@ final class VoiceCommander: ObservableObject {
         }
         phase = .thinking
         Task {
+            // Lo básico lo resuelve la gramática al instante. Lo demás va al cerebro del Mac:
+            // primero lo que ya aprendió y, si no, Claude.
+            let grammar = VoiceGrammar(apps: remote.apps, routines: remote.routines).parse(order)
+            if !(grammar.understood && !grammar.steps.isEmpty), case .connected = remote.phase {
+                remote.ask(order)
+                phase = .idle
+                return
+            }
             let steps = await plan(order, remote: remote)
             if steps.isEmpty {
                 phase = .failed("no entendí “\(order)”. Prueba: “cierra Fotos”, “sube el volumen a 60”, “busca … en YouTube”")

@@ -319,6 +319,15 @@ enum Command: Codable {
     case requestPermission(PermissionKind)
     /// Acciones de la app que está al frente en el Mac.
     case requestAppActions
+    /// El cerebro: una orden en lenguaje natural (primero el grafo aprendido, luego Claude).
+    case ask(text: String)
+    case brainConfirm(id: String, ok: Bool)
+    /// "no era eso": el cerebro olvida lo aprendido para esa orden.
+    case brainFeedback(id: String, good: Bool)
+    case brainRun(intent: String)
+    case brainForget(intent: String?)
+    case brainSettings(claudeOn: Bool)
+    case brainInfo
     case pressAction(DeckAction)
     /// Mandar al iPhone cada captura de pantalla que se tome en el Mac.
     case screenshotsToPhone(Bool)
@@ -361,6 +370,12 @@ enum Event: Codable {
     /// Estado de cada permiso de macOS que usa Zarcillo.
     case macPermissions([PermissionEntry])
     case appActions(AppActions)
+    case brainThinking(id: String)
+    /// Un plan que espera tu permiso (tiene pasos con riesgo).
+    case brainPlan(BrainPlan)
+    case brainResult(id: String, ok: Bool, reply: String, source: String, output: String?, intent: String?)
+    case brainSuggest([BrainSuggestion])
+    case brainInfo(BrainInfo)
     /// Una captura de pantalla recién tomada en el Mac (PNG o JPEG).
     case screenshot(name: String, data: Data)
     case screenshotsState(Bool)

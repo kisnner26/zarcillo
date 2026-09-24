@@ -30,6 +30,7 @@ final class Server: ObservableObject {
     let guest = GuestSprout()
     let mixer = Mixer()
     let deck = DeckEngine()
+    let brain = Brain()
     let shots = ScreenshotWatcher()
     @Published private(set) var sendScreenshots = true
     /// Estado de los permisos de macOS; el menú y el iPhone lo muestran.
@@ -114,6 +115,7 @@ final class Server: ObservableObject {
             self?.broadcast(.appActions(actions))
             self?.touchBar?.refresh()
         }
+        brain.server = self
         deck.onFail = { [weak self] action in
             self?.hud.showMessage("\(action.title) no está disponible", symbol: "exclamationmark.circle")
         }
@@ -565,6 +567,33 @@ final class Server: ObservableObject {
                         }
                     }
                 }
+            }
+
+        case .ask(let text):
+            brain.ask(text) { [weak self] event in self?.reply(key, event) }
+
+        case .brainConfirm(let id, let ok):
+            brain.confirm(id, ok: ok)
+
+        case .brainFeedback(let id, let good):
+            brain.feedback(id, good: good)
+            reply(key, .brainInfo(brain.info()))
+
+        case .brainRun(let intent):
+            brain.runIntent(intent) { [weak self] event in self?.reply(key, event) }
+
+        case .brainForget(let intent):
+            brain.forget(intent)
+            reply(key, .brainInfo(brain.info()))
+
+        case .brainSettings(let on):
+            brain.setClaude(on)
+            reply(key, .brainInfo(brain.info()))
+
+        case .brainInfo:
+            Task { @MainActor in
+                await self.brain.refreshClaude()
+                self.reply(key, .brainInfo(self.brain.info()))
             }
 
         case .requestAppActions:

@@ -50,12 +50,13 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, shots, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
+    case classes, photos, send, scan, shots, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .classes: "clases"
+        case .brain: "cerebro"
         case .shots: "capturas"
         case .permissions: "permisos"
         case .detach: "desprender"
@@ -85,6 +86,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .classes: "transcribe y traduce en vivo"
+        case .brain: "Claude y lo que va aprendiendo"
         case .shots: "las del Mac, listas para usar"
         case .permissions: "lo que el Mac te deja usar"
         case .detach: "una ventana del Mac en tu mano"
@@ -114,6 +116,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .classes: "waveform"
+        case .brain: "brain.head.profile"
         case .shots: "camera.viewfinder"
         case .permissions: "checkmark.shield"
         case .detach: "macwindow.badge.plus"
@@ -183,7 +186,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
         case .security: [.guardian, .near, .guest]
-        case .custom: [.routines, .shortcuts, .touchBar, .color, .permissions]
+        case .custom: [.brain, .routines, .shortcuts, .touchBar, .color, .permissions]
         }
     }
 }
@@ -253,6 +256,7 @@ struct Instrument: View {
         .overlay(alignment: .top) { Toast() }
         .overlay { HarvestFall() }
         .overlay(alignment: .top) { VoiceOverlay(voice: voice).padding(.top, Space.s) }
+        .overlay(alignment: .top) { BrainOverlay().padding(.top, Space.s) }
         .fullScreenCover(isPresented: $callLight) { CallLight(shown: $callLight) }
         .overlay {
             if let a = remote.alarm {
@@ -1254,6 +1258,7 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .classes: ClassesPage()
+        case .brain: BrainPage()
         case .shots: ShotsPage()
         case .permissions: PermissionsPage()
         case .detach: DetachPage()

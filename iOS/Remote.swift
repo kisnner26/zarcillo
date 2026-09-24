@@ -35,6 +35,23 @@ enum Keychain {
     }
 }
 
+/// Lo que el cerebro está haciendo con tu última orden.
+enum BrainState: Equatable {
+    case idle
+    case thinking
+    case confirm(BrainPlan)
+    case done(BrainDone)
+}
+
+struct BrainDone: Equatable {
+    let id: String
+    let ok: Bool
+    let reply: String
+    let source: String
+    let output: String?
+    let intent: String?
+}
+
 /// Una captura de pantalla que llegó del Mac.
 struct Shot: Identifiable {
     let id = UUID()
@@ -107,6 +124,36 @@ final class Remote: ObservableObject {
 
     func requestAppActions() { send(.requestAppActions) }
 
+    // MARK: Cerebro
+
+    func ask(_ text: String) {
+        withAnimation(.spring(duration: 0.35)) { brain = .thinking }
+        suggestions = []
+        send(.ask(text: text))
+    }
+
+    func brainConfirm(_ plan: BrainPlan, ok: Bool) {
+        if ok { withAnimation(.spring(duration: 0.35)) { brain = .thinking } } else { dismissBrain() }
+        send(.brainConfirm(id: plan.id, ok: ok))
+    }
+
+    func brainWrong(_ intent: String) {
+        send(.brainFeedback(id: intent, good: false))
+        flash("lo olvidé: la próxima vez decide Claude")
+        dismissBrain()
+    }
+
+    func dismissBrain() { withAnimation(.easeOut(duration: 0.25)) { brain = .idle } }
+
+    /// La tarjeta del resultado se va sola, salvo que haya algo pendiente.
+    private func scheduleBrainHide(_ id: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 9) { [weak self] in
+            MainActor.assumeIsolated {
+                if case .done(let d) = self?.brain, d.id == id { self?.dismissBrain() }
+            }
+        }
+    }
+
     func setScreenshots(_ on: Bool) {
         screenshotsOn = on
         send(.screenshotsToPhone(on))
@@ -167,6 +214,10 @@ final class Remote: ObservableObject {
     @Published private(set) var guestURL: String?
     @Published private(set) var guestExpires: Date?
     @Published private(set) var detachedTitle: String?
+    /// El cerebro (Claude + lo aprendido): lo que se ve en la tarjeta de arriba.
+    @Published private(set) var brain: BrainState = .idle
+    @Published private(set) var brainInfo: BrainInfo?
+    @Published private(set) var suggestions: [BrainSuggestion] = []
     /// Botones de la app que está al frente en el Mac (sus menús, lo esencial, lo más usado).
     @Published private(set) var appActions: AppActions?
     /// Capturas de pantalla del Mac que llegaron (la más nueva primero).
@@ -492,6 +543,21 @@ final class Remote: ObservableObject {
             guestExpires = expires.map { Date(timeIntervalSince1970: $0) }
         case .appActions(let a):
             appActions = a
+        case .brainThinking:
+            withAnimation(.spring(duration: 0.35)) { brain = .thinking }
+        case .brainPlan(let plan):
+            Haptic.tap()
+            withAnimation(.spring(duration: 0.35)) { brain = .confirm(plan) }
+        case .brainResult(let id, let ok, let reply, let source, let output, let intent):
+            UINotificationFeedbackGenerator().notificationOccurred(ok ? .success : .error)
+            withAnimation(.spring(duration: 0.35)) {
+                brain = .done(BrainDone(id: id, ok: ok, reply: reply, source: source, output: output, intent: intent))
+            }
+            scheduleBrainHide(id)
+        case .brainSuggest(let list):
+            suggestions = list
+        case .brainInfo(let info):
+            brainInfo = info
         case .screenshotsState(let on):
             screenshotsOn = on
         case .screenshot(let name, let data):
