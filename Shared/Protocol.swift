@@ -329,6 +329,8 @@ enum Command: Codable {
     case brainSettings(claudeOn: Bool)
     case brainInfo
     /// Enseñar por demostración: el Mac anota apps y atajos hasta `teachStop`.
+    /// Modo privacidad: filtro antiespía por software en el Mac.
+    case privacy(on: Bool, strength: Double, focus: Bool, onlookers: Bool)
     case teachStart(name: String)
     case teachStop
     case teachCancel
@@ -385,6 +387,7 @@ enum Event: Codable {
     /// Carga del procesador (0…1) y si acaba de terminar algo largo.
     case vitals(cpu: Double, aurora: Bool)
     case teachState(recording: Bool, steps: Int, saved: String?)
+    case privacyState(on: Bool, onlooker: Bool)
     case herbCard(HerbCard)
     /// Una captura de pantalla recién tomada en el Mac (PNG o JPEG).
     case screenshot(name: String, data: Data)

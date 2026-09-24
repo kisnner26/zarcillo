@@ -50,13 +50,14 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
+    case classes, privacy, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .classes: "clases"
         case .brain: "cerebro"
+        case .privacy: "privacidad"
         case .shots: "capturas"
         case .garden: "jardín"
         case .herbarium: "herbario"
@@ -90,6 +91,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         switch self {
         case .classes: "transcribe y traduce en vivo"
         case .brain: "Claude y lo que va aprendiendo"
+        case .privacy: "filtro antiespía en la pantalla"
         case .shots: "las del Mac, reveladas al llegar"
         case .garden: "lo que aprendió, hecho planta"
         case .herbarium: "fotografía una planta y guarda su ficha"
@@ -123,6 +125,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         switch self {
         case .classes: "waveform"
         case .brain: "brain.head.profile"
+        case .privacy: "eye.slash"
         case .shots: "camera.viewfinder"
         case .garden: "camera.macro"
         case .herbarium: "leaf.circle"
@@ -194,7 +197,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         case .mac: [.layers, .detach, .mixer, .compass, .gaze, .laser, .gestures, .power, .brightness]
         case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
-        case .security: [.guardian, .near, .guest]
+        case .security: [.privacy, .guardian, .near, .guest]
         case .custom: [.garden, .herbarium, .brain, .routines, .shortcuts, .touchBar, .color, .permissions]
         }
     }
@@ -1281,6 +1284,7 @@ struct MoreStage: View {
             }
         case .classes: ClassesPage()
         case .brain: BrainPage()
+        case .privacy: PrivacyPage()
         case .shots: ShotsPage()
         case .garden: GardenPage()
         case .herbarium: HerbariumPage()
@@ -1583,6 +1587,7 @@ extension Remote {
     func isActive(_ item: MoreItem) -> Bool {
         switch item {
         case .guardian: guardianOn
+        case .privacy: privacyOn
         case .near: nearOn
         case .guest: guestURL != nil
         case .posture: postureOn

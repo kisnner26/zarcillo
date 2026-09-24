@@ -149,6 +149,13 @@ final class Remote: ObservableObject {
         send(.teachStart(name: n))
     }
 
+    func setPrivacy(_ on: Bool) {
+        let d = UserDefaults.standard
+        privacyOn = on
+        send(.privacy(on: on, strength: d.object(forKey: "privacy.strength") as? Double ?? 0.6,
+                      focus: d.bool(forKey: "privacy.focus"), onlookers: d.bool(forKey: "privacy.onlookers")))
+    }
+
     func teachStop() { send(.teachStop) }
     func teachCancel() { send(.teachCancel) }
 
@@ -231,6 +238,9 @@ final class Remote: ObservableObject {
     @Published private(set) var auroraUntil = Date.distantPast
     /// Enseñar por demostración: el Mac está mirando y anotando pasos.
     @Published private(set) var teaching = false
+    /// Modo privacidad del Mac y si ahora mismo hay alguien más mirando.
+    @Published private(set) var privacyOn = false
+    @Published private(set) var onlooker = false
     @Published private(set) var teachSteps = 0
     @Published private(set) var suggestions: [BrainSuggestion] = []
     /// Botones de la app que está al frente en el Mac (sus menús, lo esencial, lo más usado).
@@ -576,6 +586,10 @@ final class Remote: ObservableObject {
         case .vitals(let load, let aurora):
             cpu = load
             if aurora, auroraUntil < Date() { auroraUntil = Date().addingTimeInterval(20) }
+        case .privacyState(let on, let seen):
+            privacyOn = on
+            if seen && !onlooker { UINotificationFeedbackGenerator().notificationOccurred(.warning); flash("alguien más mira tu Mac") }
+            onlooker = seen
         case .teachState(let recording, let steps, let saved):
             teaching = recording
             teachSteps = steps

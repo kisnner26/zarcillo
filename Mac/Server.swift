@@ -34,6 +34,7 @@ final class Server: ObservableObject {
     let aura = Aura()
     let vitals = Vitals()
     let teacher = Teacher()
+    let privacy = PrivacyShield()
     let shots = ScreenshotWatcher()
     @Published private(set) var sendScreenshots = true
     /// Estado de los permisos de macOS; el menú y el iPhone lo muestran.
@@ -95,6 +96,10 @@ final class Server: ObservableObject {
                 let v = self.vitals.sample()
                 if !self.clients.isEmpty { self.broadcast(.vitals(cpu: v.cpu, aurora: v.aurora)) }
             }
+        }
+        privacy.onChange = { [weak self] on, seen in
+            self?.broadcast(.privacyState(on: on, onlooker: seen))
+            if seen { self?.hud.pulse(1) }
         }
         teacher.onChange = { [weak self] rec, n, saved in self?.broadcast(.teachState(recording: rec, steps: n, saved: saved)) }
         touchBar = TouchBarController(server: self)
@@ -600,6 +605,10 @@ final class Server: ObservableObject {
         case .brainSettings(let on):
             brain.setClaude(on)
             reply(key, .brainInfo(brain.info()))
+
+        case .privacy(let on, let strength, let focus, let onlookers):
+            privacy.set(on: on, strength: strength, focus: focus, onlookers: onlookers)
+            if on { hud.showMessage("modo privacidad", symbol: "eye.slash") }
 
         case .teachStart(let name):
             teacher.start(name: name)
