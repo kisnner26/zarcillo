@@ -26,6 +26,9 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Zarcillo
+        # Deben coincidir con los del reloj o iOS no instala la app del reloj.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
