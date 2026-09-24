@@ -146,11 +146,29 @@ struct MusicStage: View {
             let frac = np.duration > 0 ? pos / np.duration : 0
             VStack(spacing: 6) {
                 GeometryReader { g in
+                    let usable = g.size.width - VineProgress.inset * 2
                     VineProgress(progress: frac, color: Tone.ember,
-                                 phase: np.playing ? tl.date.timeIntervalSinceReferenceDate : 0)
+                                 phase: np.playing ? tl.date.timeIntervalSinceReferenceDate : 0,
+                                 active: scrub != nil)
+                        .overlay(alignment: .topLeading) {
+                            // Al arrastrar, una burbuja con el tiempo sobre la punta.
+                            if let s = scrub {
+                                Text(clock(s))
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Tone.onEmber)
+                                    .padding(.horizontal, 8).padding(.vertical, 4)
+                                    .background(Capsule().fill(Tone.ember))
+                                    .fixedSize()
+                                    .position(x: VineProgress.inset + usable * CGFloat(frac), y: -14)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
                         .contentShape(Rectangle())
                         .gesture(DragGesture(minimumDistance: 0)
-                            .onChanged { v in scrub = max(0, min(1, v.location.x / g.size.width)) * np.duration }
+                            .onChanged { v in
+                                let f = (v.location.x - VineProgress.inset) / max(usable, 1)
+                                scrub = max(0, min(1, f)) * np.duration
+                            }
                             .onEnded { _ in
                                 if let s = scrub { remote.send(.seek(seconds: s)) }
                                 Detents.shared.press()
@@ -165,6 +183,7 @@ struct MusicStage: View {
                 }
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.6))
+                .padding(.horizontal, VineProgress.inset)
             }
         }
     }
@@ -324,40 +343,72 @@ private struct SpinWhile: ViewModifier {
     }
 }
 
-/// El progreso como un zarcillo: una onda que ondula mientras suena, con un
-/// brote de luz en la punta.
+/// El progreso como un tallo que crece: lo que falta es una línea fina y
+/// quieta; lo escuchado es un tallo en el color del tema que ondula apenas y
+/// echa hojas a medida que avanza, con la punta enroscada en un zarcillo.
 struct VineProgress: View {
     let progress: Double
     let color: Color
     var phase: Double = 0
+    /// Mientras se arrastra, la punta crece.
+    var active = false
+
+    /// Margen a cada lado: la punta nunca se corta contra el borde.
+    static let inset: CGFloat = 12
 
     var body: some View {
         Canvas { ctx, size in
+            let inset = Self.inset
             let mid = size.height / 2
-            let amp: CGFloat = 5
-            let wave: CGFloat = 34
-            func path(to limit: CGFloat) -> Path {
-                var p = Path()
-                var x: CGFloat = 0
-                p.move(to: CGPoint(x: 0, y: mid + sin(CGFloat(phase) * 1.4) * amp))
-                while x <= limit {
-                    p.addLine(to: CGPoint(x: x, y: mid + sin(x / wave * 2 * .pi + CGFloat(phase) * 1.4) * amp))
-                    x += 2
-                }
-                return p
-            }
-            let head = size.width * CGFloat(min(1, max(0, progress)))
-            ctx.stroke(path(to: size.width), with: .color(.white.opacity(0.18)),
-                       style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            let usable = size.width - inset * 2
+            let head = inset + usable * CGFloat(min(1, max(0, progress)))
+            let amp: CGFloat = 2.2
+            let t = CGFloat(phase)
+            func y(_ x: CGFloat) -> CGFloat { mid + sin(x / 22 + t * 1.2) * amp }
+
+            // Lo que falta: línea recta y quieta.
+            var rest = Path()
+            rest.move(to: CGPoint(x: head, y: mid))
+            rest.addLine(to: CGPoint(x: size.width - inset, y: mid))
+            ctx.stroke(rest, with: .color(.white.opacity(0.2)), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+
+            // Lo escuchado: el tallo.
+            var stem = Path()
+            stem.move(to: CGPoint(x: inset, y: y(inset)))
+            var x = inset
+            while x < head { x = min(head, x + 2); stem.addLine(to: CGPoint(x: x, y: y(x))) }
             var glow = ctx
-            glow.addFilter(.blur(radius: 5))
-            glow.stroke(path(to: head), with: .color(color.opacity(0.8)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-            ctx.stroke(path(to: head), with: .color(color), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-            let y = mid + sin(head / wave * 2 * .pi + CGFloat(phase) * 1.4) * amp
-            let bud = CGRect(x: head - 7, y: y - 7, width: 14, height: 14)
-            glow.fill(Path(ellipseIn: bud.insetBy(dx: -4, dy: -4)), with: .color(color))
-            ctx.fill(Path(ellipseIn: bud), with: .color(.white))
+            glow.addFilter(.blur(radius: 4))
+            glow.stroke(stem, with: .color(color.opacity(0.55)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            ctx.stroke(stem, with: .color(color), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+
+            // Hojas: una cada 30 pt, alternando arriba y abajo; cada una crece
+            // en los 18 pt que siguen a su nacimiento.
+            var i = 0
+            var lx = inset + 22
+            while lx < head - 4 {
+                let grow = min(1, (head - lx) / 18)
+                let up = i % 2 == 0
+                let w = 6 * grow, h = 11 * grow
+                let leaf = LeafShape().path(in: CGRect(x: -w / 2, y: -h, width: w, height: h))
+                    .applying(CGAffineTransform(rotationAngle: up ? -0.75 : 0.75 + .pi))
+                    .applying(CGAffineTransform(translationX: lx, y: y(lx)))
+                ctx.fill(leaf, with: .color(color.opacity(0.9)))
+                lx += 30
+                i += 1
+            }
+
+            // La punta: un zarcillo que se enrosca, con luz.
+            let r: CGFloat = active ? 9 : 7
+            let tip = CGPoint(x: head, y: y(head))
+            let curl = Tendril(tightness: 0.35)
+                .path(in: CGRect(x: tip.x - r, y: tip.y - r * 2, width: r * 2, height: r * 2))
+            ctx.stroke(curl, with: .color(color), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            glow.fill(Path(ellipseIn: CGRect(x: tip.x - r, y: tip.y - r, width: r * 2, height: r * 2)), with: .color(color))
+            ctx.fill(Path(ellipseIn: CGRect(x: tip.x - r * 0.55, y: tip.y - r * 0.55, width: r * 1.1, height: r * 1.1)),
+                     with: .color(.white))
         }
+        .animation(.spring(duration: 0.25), value: active)
     }
 }
 
@@ -398,6 +449,7 @@ struct StoryPoster: View {
                         }
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, VineProgress.inset)
                     }
                     .frame(width: 250)
                 }
