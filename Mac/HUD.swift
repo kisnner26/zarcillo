@@ -28,19 +28,22 @@ final class HUD: ObservableObject {
 
     private func show(_ c: Content) {
         content = c
-        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
-        let p = panel ?? makePanel(content: AnyView(HUDView(hud: self)))
+        guard let s = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main
+        else { return }
+        let hudFrame = NSRect(x: s.frame.minX + 18, y: s.visibleFrame.maxY - size.height - 4,
+                              width: size.width, height: size.height)
+        // Los paneles nacen con su tamaño final y solo se mueven si cambió la
+        // pantalla: recolocarlos en cada aviso (30 por segundo al girar la
+        // perilla) hacía que AppKit recalculara sin fin y cerrara la app.
+        let p = panel ?? makePanel(frame: hudFrame, content: AnyView(HUDView(hud: self)))
         panel = p
-        let g = glow ?? makePanel(content: AnyView(CornerGlow(hud: self)))
+        let g = glow ?? makePanel(frame: s.frame, content: AnyView(CornerGlow(hud: self)))
         glow = g
-        if let s = screen {
-            p.setFrame(NSRect(x: s.frame.minX + 18, y: s.visibleFrame.maxY - size.height - 4,
-                              width: size.width, height: size.height), display: false)
-            g.setFrame(s.frame, display: false)
-        }
+        if p.frame != hudFrame { p.setFrame(hudFrame, display: false) }
+        if g.frame != s.frame { g.setFrame(s.frame, display: false) }
         g.orderFrontRegardless()
         p.orderFrontRegardless()
-        withAnimation(.spring(duration: 0.4, bounce: 0.3)) { visible = true }
+        if !visible { withAnimation(.spring(duration: 0.4, bounce: 0.3)) { visible = true } }
 
         hideWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
@@ -57,15 +60,18 @@ final class HUD: ObservableObject {
     }
 
     /// Paneles transparentes que no roban clics ni el foco.
-    private func makePanel(content: AnyView) -> NSPanel {
-        let p = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    private func makePanel(frame: NSRect, content: AnyView) -> NSPanel {
+        let p = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.isOpaque = false
         p.backgroundColor = .clear
         p.hasShadow = false
         p.level = .statusBar
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        p.contentView = NSHostingView(rootView: content)
+        let host = fixedHost(content)
+        host.frame = NSRect(origin: .zero, size: frame.size)
+        host.autoresizingMask = [.width, .height]
+        p.contentView = host
         return p
     }
 }

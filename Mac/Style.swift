@@ -60,3 +60,15 @@ struct Ceramic<S: InsettableShape>: View {
         }
     }
 }
+
+/// Vista de SwiftUI para paneles flotantes con tamaño fijo.
+///
+/// Por defecto `NSHostingView` intenta ajustar la ventana a su contenido; en un
+/// panel que el código ya dimensiona eso entra en un bucle de restricciones y
+/// AppKit termina la app ("more Update Constraints in Window passes than there
+/// are views"). Aquí SwiftUI dibuja y nada más.
+func fixedHost<V: View>(_ view: V) -> NSView {
+    let host = NSHostingView(rootView: view)
+    host.sizingOptions = []
+    return host
+}

@@ -3,15 +3,37 @@ import SwiftUI
 
 @main
 struct ZarcilloMacApp: App {
-    @StateObject private var server = Server()
+    // `@State` y no `@StateObject`: la escena no debe redibujarse con cada
+    // cambio del servidor. El icono de la barra de menús vive en una ventanita
+    // de AppKit, y redibujarlo muchas veces seguidas mientras se acomoda hacía
+    // que AppKit cerrara la app ("more Update Constraints … than there are views").
+    @State private var server = Server()
 
     var body: some Scene {
         MenuBarExtra {
             MenuView().environmentObject(server)
         } label: {
-            Image(systemName: server.devices.isEmpty ? "leaf" : "leaf.fill")
+            LeafLabel(presence: server.presence)
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+/// Lo único que el icono necesita saber: si hay un iPhone conectado.
+@MainActor
+final class Presence: ObservableObject {
+    @Published private(set) var connected = false
+
+    func set(_ value: Bool) {
+        if value != connected { connected = value }
+    }
+}
+
+struct LeafLabel: View {
+    @ObservedObject var presence: Presence
+
+    var body: some View {
+        Image(systemName: presence.connected ? "leaf.fill" : "leaf")
     }
 }
 
@@ -63,9 +85,10 @@ struct MenuView: View {
             }
             Spacer()
             let color = server.devices.isEmpty ? MacTone.ember : MacTone.leaf
+            // Brillo fijo, sin latir: una animación continua en esta ventana la
+            // hacía recalcular su tamaño sin parar, y AppKit terminaba la app.
             Circle().fill(color).frame(width: 9, height: 9)
                 .shadow(color: color, radius: 6)
-                .phaseAnimator([1.0, 0.4]) { v, o in v.opacity(o) } animation: { _ in .easeInOut(duration: 1.4) }
         }
     }
 

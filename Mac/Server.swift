@@ -4,7 +4,10 @@ import Network
 @MainActor
 final class Server: ObservableObject {
     @Published private(set) var passcode: String
-    @Published private(set) var devices: [String] = []
+    @Published private(set) var devices: [String] = [] {
+        didSet { presence.set(!devices.isEmpty) }
+    }
+    let presence = Presence()
     @Published private(set) var canControl = Input.isTrusted
     @Published private(set) var listening = false
     @Published private(set) var problem: String?

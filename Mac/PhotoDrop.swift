@@ -95,8 +95,8 @@ final class PhotoDrop: ObservableObject {
 
     private func showSky() {
         guard let s = screen else { return }
-        let p = sky ?? makePanel(clickable: false, content: AnyView(SkyView(drop: self)))
-        p.setFrame(s.frame, display: true)
+        let p = sky ?? makePanel(frame: s.frame, clickable: false, content: AnyView(SkyView(drop: self)))
+        if p.frame != s.frame { p.setFrame(s.frame, display: false) }
         p.orderFrontRegardless()
         sky = p
     }
@@ -104,9 +104,10 @@ final class PhotoDrop: ObservableObject {
     private func showTray() {
         guard let s = screen else { return }
         let size = NSSize(width: 460, height: 190)
-        let p = tray ?? makePanel(clickable: true, content: AnyView(TrayView(drop: self)))
-        p.setFrame(NSRect(x: s.visibleFrame.maxX - size.width - 12, y: s.visibleFrame.minY + 12,
-                          width: size.width, height: size.height), display: true)
+        let frame = NSRect(x: s.visibleFrame.maxX - size.width - 12, y: s.visibleFrame.minY + 12,
+                           width: size.width, height: size.height)
+        let p = tray ?? makePanel(frame: frame, clickable: true, content: AnyView(TrayView(drop: self)))
+        if p.frame != frame { p.setFrame(frame, display: false) }
         p.orderFrontRegardless()
         tray = p
         scheduleTrayHide()
@@ -124,15 +125,18 @@ final class PhotoDrop: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
     }
 
-    private func makePanel(clickable: Bool, content: AnyView) -> NSPanel {
-        let p = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    private func makePanel(frame: NSRect, clickable: Bool, content: AnyView) -> NSPanel {
+        let p = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.isOpaque = false
         p.backgroundColor = .clear
         p.hasShadow = false
         p.level = .statusBar
         p.ignoresMouseEvents = !clickable
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        p.contentView = NSHostingView(rootView: content)
+        let host = fixedHost(content)
+        host.frame = NSRect(origin: .zero, size: frame.size)
+        host.autoresizingMask = [.width, .height]
+        p.contentView = host
         return p
     }
 }

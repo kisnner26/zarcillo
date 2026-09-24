@@ -178,7 +178,7 @@ final class Laser: ObservableObject {
         p.level = .screenSaver
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        p.contentView = NSHostingView(rootView: LaserView(laser: self))
+        p.contentView = fixedHost(LaserView(laser: self))
         panel = p
         return p
     }
