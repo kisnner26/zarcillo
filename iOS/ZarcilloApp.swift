@@ -13,7 +13,11 @@ struct ZarcilloApp: App {
                 .persistentSystemOverlays(.hidden)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { remote.resume() }
+            if phase == .active {
+                remote.resume()
+                // Por si quedó un pedido de orientación colgado: el giro es libre.
+                Orientation.request(.allButUpsideDown)
+            }
         }
     }
 }

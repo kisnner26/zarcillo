@@ -43,7 +43,6 @@ struct FullScreenMac: View {
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: CGFloat = 1
     @State private var hint = true
-    @State private var previous: UIInterfaceOrientationMask = .portrait
 
     var body: some View {
         ZStack {
@@ -96,19 +95,17 @@ struct FullScreenMac: View {
         .persistentSystemOverlays(.hidden)
         .onAppear {
             remote.send(.screen(on: true, width: 1800))
-            rotate(to: .landscape, remember: true)
+            Orientation.request(.landscape)
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { withAnimation { hint = false } }
         }
         .onDisappear {
             remote.send(.screen(on: true, width: 960))
-            rotate(to: previous, remember: false)
+            // Devolverle el giro al sistema. Pedir "solo vertical" aquí quedaba
+            // como un bloqueo y el iPhone ya no giraba a horizontal.
+            Orientation.request(.allButUpsideDown)
         }
     }
 
-    private func rotate(to mask: UIInterfaceOrientationMask, remember: Bool) {
-        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        if remember { previous = scene.interfaceOrientation.isLandscape ? .landscape : .portrait }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
     }
 }
 
@@ -233,5 +230,14 @@ struct LiveScreen: View {
         taps += 1
         Haptic.tap()
         remote.send(.tapScreen(x: x, y: y, button: button))
+    }
+}
+
+enum Orientation {
+    /// Pide al sistema estas orientaciones. Lo pedido persiste, así que siempre
+    /// hay que devolver `.allButUpsideDown` al terminar.
+    static func request(_ mask: UIInterfaceOrientationMask) {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
     }
 }
