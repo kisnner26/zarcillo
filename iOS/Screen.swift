@@ -30,8 +30,6 @@ struct ScreenPage: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .onAppear { remote.send(.screen(on: true, width: 960)) }
-            .onDisappear { if !full { remote.send(.screen(on: false, width: 0)) } }
             .fullScreenCover(isPresented: $full) {
                 FullScreenMac().environmentObject(remote)
             }

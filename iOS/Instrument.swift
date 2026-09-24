@@ -120,130 +120,90 @@ struct Instrument: View {
 
     var body: some View {
         Group {
-            if landscape {
+            if landscape && deck.mode == .screen {
+                // El Mac a pantalla completa: sin perilla ni anillo. Al volver a
+                // vertical, el instrumento reaparece.
+                LandscapeScreen { withAnimation(.spring(duration: 0.4)) { deck.mode = .pad } }
+                    .transition(.opacity)
+            } else if landscape {
                 HStack(spacing: Space.m) {
-                    VStack(alignment: .leading, spacing: Space.s) {
-                        Header()
-                        Stage().frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+                    Stage().frame(maxWidth: .infinity, maxHeight: .infinity)
                     ControlDeck(ring: 100, knob: 100)
                         .frame(width: 330)
                 }
                 .padding(.horizontal, Space.m).padding(.vertical, Space.s)
             } else {
                 VStack(spacing: 0) {
-                    Header()
-                        .padding(.horizontal, Space.l)
-                        .padding(.top, Space.s)
                     Stage()
                         .padding(.horizontal, Space.m)
-                        .padding(.top, Space.m)
+                        .padding(.top, Space.s)
                         .frame(maxHeight: .infinity)
                     ControlDeck(ring: 124, knob: 128)
                         .frame(height: 360)
                 }
             }
         }
+        // Los avisos del Mac: una notificación breve arriba, solo cuando hay algo que decir.
+        .overlay(alignment: .top) { Toast() }
+        .animation(.spring(duration: 0.45, bounce: 0.2), value: landscape && deck.mode == .screen)
+        // La pantalla en vivo se pide desde aquí, según el modo y la orientación:
+        // en horizontal, con el doble de resolución.
+        .onChange(of: screenWidth, initial: true) { _, w in
+            remote.send(.screen(on: w > 0, width: w))
+        }
         .environmentObject(deck)
     }
+
+    private var screenWidth: Int {
+        guard deck.mode == .screen else { return 0 }
+        return landscape ? 1800 : 960
+    }
 }
 
-// MARK: - Encabezado (Órbita)
-
-/// Lo elegido, en grande. Los avisos del Mac aparecen aquí mismo, en naranja,
-/// en vez de tapar la pantalla con una pastilla.
-struct Header: View {
+/// Aviso breve del Mac ("abriendo Safari", "foto recibida"…).
+struct Toast: View {
     @EnvironmentObject private var remote: Remote
-    @EnvironmentObject private var deck: Deck
 
     var body: some View {
-        HStack(alignment: .top, spacing: Space.m) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Tone.ember)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.55)
-                    .contentTransition(.interpolate)
-                HStack(spacing: 6) {
-                    if remote.pill != nil {
-                        Image(systemName: "sparkle").font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.ember)
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                    Text(remote.pill ?? subtitle)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(remote.pill != nil ? Tone.ember : Tone.ink.opacity(0.55))
-                        .lineLimit(1)
-                        .contentTransition(.opacity)
-                }
+        if let text = remote.pill {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkle").font(.system(size: 10, weight: .bold)).foregroundStyle(Tone.ember)
+                Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ink).lineLimit(1)
             }
-            Spacer(minLength: 0)
-            StatusLED()
-                .padding(.top, 12)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.spring(duration: 0.35), value: title)
-        .animation(.spring(duration: 0.35), value: remote.pill)
-    }
-
-    private var selectedApp: AppTile? {
-        remote.apps.indices.contains(deck.appIndex) ? remote.apps[deck.appIndex] : nil
-    }
-
-    private var title: String {
-        switch deck.mode {
-        case .pad: return "Pad"
-        case .apps: return selectedApp?.name ?? "Apps"
-        case .music:
-            guard let np = remote.nowPlaying else { return "Música" }
-            return np.playing ? "Sonando" : "En pausa"
-        case .screen: return "Pantalla"
-        case .more:
-            if let open = deck.moreOpen { return open.title.capitalized }
-            let items = MoreItem.visible(touchBar: remote.hasTouchBar)
-            return items.indices.contains(deck.moreIndex) ? items[deck.moreIndex].title.capitalized : "Más"
-        }
-    }
-
-    private var subtitle: String {
-        switch deck.mode {
-        case .pad: return remote.macName
-        case .apps:
-            guard let app = selectedApp else { return "cargando el Dock…" }
-            let n = remote.windows(of: app.id).count
-            if !app.running { return "cerrada · toca la perilla" }
-            return n == 1 ? "1 ventana · mantén para verla" : "\(n) ventanas · mantén para verlas"
-        case .music:
-            guard let np = remote.nowPlaying else { return "nada sonando" }
-            return "\(np.source) · compártelo con ↗"
-        case .screen: return remote.canCapture ? "toca la imagen para hacer clic" : "falta permiso en el Mac"
-        case .more:
-            if deck.moreOpen != nil { return "toca la perilla para volver" }
-            let items = MoreItem.visible(touchBar: remote.hasTouchBar)
-            return items.indices.contains(deck.moreIndex) ? items[deck.moreIndex].detail : ""
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Capsule().fill(Tone.key))
+            .overlay(Capsule().stroke(Tone.ember.opacity(0.35), lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+            .padding(.top, 4)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(.spring(duration: 0.4, bounce: 0.3), value: remote.pill)
         }
     }
 }
 
-/// El piloto del aparato: verde si el Mac obedece, ámbar si falta un permiso.
-struct StatusLED: View {
-    @EnvironmentObject private var remote: Remote
+/// La pantalla del Mac a lo ancho del iPhone girado, con zoom y un botón
+/// discreto para volver al instrumento.
+struct LandscapeScreen: View {
+    let exit: () -> Void
 
     var body: some View {
-        let color = remote.canControl ? Tone.leaf : Tone.ember
-        Button {
-            Haptic.tap()
-            remote.flash(remote.canControl ? "conectado a \(remote.macName)" : "falta el permiso de Accesibilidad en el Mac")
-        } label: {
-            Circle().fill(color)
-                .frame(width: 10, height: 10)
-                .shadow(color: color.opacity(0.9), radius: 6)
-                .phaseAnimator([1.0, 0.45]) { v, o in v.opacity(o) } animation: { _ in .easeInOut(duration: 1.4) }
-                .frame(width: Space.tap, height: Space.tap)
-                .contentShape(Rectangle())
+        ZStack(alignment: .topLeading) {
+            Color.black.ignoresSafeArea()
+            LiveScreen(zoomable: true).ignoresSafeArea()
+            Button {
+                Haptic.tap()
+                exit()
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(.black.opacity(0.45)))
+            }
+            .accessibilityLabel("salir de la pantalla del Mac")
+            .padding(Space.s)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(remote.canControl ? "conectado" : "falta un permiso")
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
     }
 }
 
