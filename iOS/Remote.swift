@@ -111,6 +111,8 @@ final class Remote: ObservableObject {
     /// Brote invitado.
     @Published private(set) var guestURL: String?
     @Published private(set) var guestExpires: Date?
+    @Published private(set) var detachedTitle: String?
+    @Published private(set) var mixerApps: [MixerApp] = []
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
     private var pendingMove = CGVector.zero
@@ -414,6 +416,14 @@ final class Remote: ObservableObject {
         case .guestPass(let url, let expires):
             guestURL = url
             guestExpires = expires.map { Date(timeIntervalSince1970: $0) }
+        case .detached(let title):
+            detachedTitle = title
+        case .mixer(let list):
+            mixerApps = list
+        case .tab(let url, let title):
+            guard let u = URL(string: url) else { return }
+            UIApplication.shared.open(u)
+            flash(title.isEmpty ? "abriendo la pestaña del Mac" : title)
         case .frontApp(let id, let name):
             frontAppID = id
             frontAppName = name

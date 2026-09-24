@@ -169,6 +169,10 @@ struct SendPage: View {
                 }
                 .buttonStyle(PressScale())
 
+                WideButton(title: "traer la pestaña del Mac", symbol: "safari", filled: false) {
+                    remote.send(.pullTab)
+                }
+
                 VStack(spacing: Space.s) {
                     SectionLabel(text: "abrir un link en el Mac")
                     HStack(spacing: Space.s) {

@@ -275,6 +275,16 @@ enum Command: Codable {
     case proximity(on: Bool, threshold: Int)
     /// Brote invitado: un código QR para que un amigo lance fotos desde su navegador.
     case guest(Bool)
+    /// Desprender una ventana: solo esa ventana viaja al iPhone, y se usa con el dedo.
+    case detach(window: String?, width: Int)
+    case tapWindow(x: Double, y: Double, button: MouseButton)
+    /// Mezclador por app.
+    case mixerList
+    case mixerGain(pid: Int32, gain: Double)
+    /// Cursor con la mirada: posición absoluta 0…1 en la pantalla principal.
+    case pointTo(x: Double, y: Double)
+    /// La pestaña que ves en el navegador del Mac, para abrirla en el iPhone.
+    case pullTab
 }
 
 /// Mac → iPhone.
@@ -306,6 +316,9 @@ enum Event: Codable {
     case guardianAlert(reason: String, photo: Data?)
     case nearState(on: Bool, rssi: Int?, threshold: Int, locked: Bool)
     case guestPass(url: String?, expires: Double?)
+    case detached(title: String?)
+    case mixer([MixerApp])
+    case tab(url: String, title: String)
 }
 
 /// Qué parte de la pantalla sigue cada foco.
@@ -412,4 +425,13 @@ enum NearBeacon {
     static func token(passcode: String) -> Data {
         Data(SHA256.hash(data: Data("zarcillo-cerca-\(passcode)".utf8)).prefix(12))
     }
+}
+
+struct MixerApp: Codable, Hashable, Identifiable {
+    var id: Int32            // pid de la app responsable
+    var bundleID: String
+    var name: String
+    var gain: Double         // 0…1
+    var playing: Bool
+    var icon: Data?
 }

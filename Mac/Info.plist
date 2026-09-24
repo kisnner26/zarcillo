@@ -26,6 +26,8 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Zarcillo lee qué suena en Música o Spotify para mostrarlo en tu iPhone.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Zarcillo toma el audio de cada app para darle su propio volumen desde el iPhone. No graba nada.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Zarcillo mide la señal de tu iPhone para bloquear el Mac cuando te alejas.</string>
 	<key>NSBonjourServices</key>

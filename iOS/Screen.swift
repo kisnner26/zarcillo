@@ -132,6 +132,8 @@ struct LiveScreen: View {
     var zoomOut: Binding<CGFloat>? = nil
     /// Modo cosechar: el dedo encierra una zona en vez de hacer clic.
     var harvesting: Binding<Bool>? = nil
+    /// Si está, los toques van aquí (0…1 sobre la imagen) en vez de a la pantalla del Mac.
+    var onTap: ((Double, Double, MouseButton) -> Void)? = nil
     @State private var lasso: CGRect?
 
     @State private var scale: CGFloat = 1
@@ -287,7 +289,7 @@ struct LiveScreen: View {
         tapPoint = p
         taps += 1
         Haptic.tap()
-        remote.send(.tapScreen(x: x, y: y, button: button))
+        if let onTap { onTap(x, y, button) } else { remote.send(.tapScreen(x: x, y: y, button: button)) }
     }
 }
 

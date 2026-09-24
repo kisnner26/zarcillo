@@ -33,7 +33,7 @@ targets:
         UIBackgroundModes: [audio, bluetooth-peripheral]
         NSBluetoothAlwaysUsageDescription: Zarcillo se anuncia por Bluetooth para que tu Mac se bloquee cuando te alejas.
         NSUserNotificationsUsageDescription: Zarcillo te avisa si alguien toca tu Mac.
-        NSCameraUsageDescription: Zarcillo usa la cámara para leer texto y escanear pizarras o apuntes hacia tu Mac.
+        NSCameraUsageDescription: Zarcillo usa la cámara para leer texto, escanear pizarras o apuntes hacia tu Mac, y para mover el cursor con la mirada.
         NSPhotoLibraryAddUsageDescription: Zarcillo guarda en Fotos el póster de la canción que estás escuchando.
     settings:
       base:
@@ -58,6 +58,7 @@ targets:
         NSBonjourServices: [_zarcillo._tcp]
         NSHumanReadableCopyright: © 2026 Kisnner Obando
         NSCameraUsageDescription: Zarcillo usa la cámara del Mac solo para el aviso de postura, sin guardar imágenes, y para fotografiar a quien toque tu Mac si activas el guardián.
+        NSAudioCaptureUsageDescription: Zarcillo toma el audio de cada app para darle su propio volumen desde el iPhone. No graba nada.
         NSBluetoothAlwaysUsageDescription: Zarcillo mide la señal de tu iPhone para bloquear el Mac cuando te alejas.
         NSAppleEventsUsageDescription: Zarcillo lee qué suena en Música o Spotify para mostrarlo en tu iPhone.
     settings:

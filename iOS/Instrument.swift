@@ -50,12 +50,15 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
+    case classes, photos, send, scan, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .classes: "clases"
+        case .detach: "desprender"
+        case .mixer: "mezclador"
+        case .gaze: "mirada"
         case .guardian: "guardián"
         case .near: "cercanía"
         case .guest: "invitado"
@@ -80,6 +83,9 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .classes: "transcribe y traduce en vivo"
+        case .detach: "una ventana del Mac en tu mano"
+        case .mixer: "volumen por app"
+        case .gaze: "el cursor sigue tus ojos"
         case .guardian: "si alguien toca tu Mac, suena"
         case .near: "se bloquea cuando te alejas"
         case .guest: "un amigo lanza fotos con un QR"
@@ -104,6 +110,9 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .classes: "waveform"
+        case .detach: "macwindow.badge.plus"
+        case .mixer: "slider.vertical.3"
+        case .gaze: "eye"
         case .guardian: "lock.shield"
         case .near: "wave.3.right"
         case .guest: "qrcode"
@@ -1030,6 +1039,9 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .classes: ClassesPage()
+        case .detach: DetachPage()
+        case .mixer: MixerPage()
+        case .gaze: GazePage()
         case .guardian: GuardianPage()
         case .near: NearPage()
         case .guest: GuestPage()

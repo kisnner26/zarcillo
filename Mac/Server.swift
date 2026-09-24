@@ -27,6 +27,9 @@ final class Server: ObservableObject {
     let guardian = Guardian()
     let near = ProximityLock()
     let guest = GuestSprout()
+    let mixer = Mixer()
+    /// La ventana desprendida, si la hay: el stream manda solo esa.
+    private var detachTarget: String?
     let macName = Host.current().localizedName ?? "Mac"
 
     /// Clientes que están mirando la pantalla en vivo.
@@ -223,6 +226,7 @@ final class Server: ObservableObject {
         clients[key] = nil
         devices = clients.values.map(\.name)
         watchers[key] = nil
+        if watchers.isEmpty { detachTarget = nil }
         inFlight.remove(key)
         beatListeners.remove(key)
         if beatListeners.isEmpty { Task { await beats.stop() } }
@@ -472,6 +476,55 @@ final class Server: ObservableObject {
             if on { guest.open(macName: macName) } else { guest.close() }
             hud.showMessage(on ? "brote invitado abierto" : "brote invitado cerrado", symbol: "qrcode")
 
+        case .detach(let window, let width):
+            detachTarget = window
+            watchers[key] = window != nil ? min(max(width, 480), 2400) : nil
+            if window != nil, !ScreenGrabber.allowed {
+                ScreenGrabber.requestAccess()
+                reply(key, .permissions(accessibility: Input.isTrusted, screen: false))
+            }
+            reply(key, .detached(title: window.flatMap { Windows.frame($0)?.title }))
+            updateStreaming()
+
+        case .tapWindow(let x, let y, let button):
+            guard allowed(key), let id = detachTarget, let t = Windows.frame(id) else { return }
+            // La ventana tiene que estar al frente para recibir el clic.
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier != t.pid { Windows.focus(id) }
+            let p = CGPoint(x: t.frame.minX + t.frame.width * min(1, max(0, x)),
+                            y: t.frame.minY + t.frame.height * min(1, max(0, y)))
+            Input.queue.asyncAfter(deadline: .now() + 0.05) {
+                Input.warp(to: p)
+                Input.click(button)
+            }
+
+        case .mixerList:
+            reply(key, .mixer(mixer.list()))
+
+        case .mixerGain(let pid, let gain):
+            mixer.set(pid, gain: gain)
+            reply(key, .mixer(mixer.list()))
+
+        case .pointTo(let x, let y):
+            guard allowed(key) else { return }
+            let b = CGDisplayBounds(CGMainDisplayID())
+            let p = CGPoint(x: b.minX + b.width * min(1, max(0, x)), y: b.minY + b.height * min(1, max(0, y)))
+            Input.queue.async { Input.warp(to: p) }
+
+        case .pullTab:
+            musicQueue.async { [weak self] in
+                let tab = BrowserTab.front()
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        if let tab {
+                            self?.reply(key, .tab(url: tab.url, title: tab.title))
+                            self?.hud.showMessage("pestaña al iPhone", symbol: "safari")
+                        } else {
+                            self?.reply(key, .status("no hay una pestaña abierta en el navegador del Mac"))
+                        }
+                    }
+                }
+            }
+
         case .photo(let data):
             photos.receive(data)
             reply(key, .status("foto recibida en el Mac"))
@@ -541,7 +594,7 @@ final class Server: ObservableObject {
                 body.append(jpeg)
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver(body) } }
             }
-            await screen.start(width: width)
+            await screen.start(width: width, window: self.detachTarget)
         }
     }
 
@@ -611,6 +664,7 @@ final class Server: ObservableObject {
             broadcast(.cameraInUse(busy))
         }
         canControl = Input.isTrusted
+        mixer.refresh()
         canCapture = ScreenGrabber.allowed
         if canCapture != wasCapture {
             broadcast(.permissions(accessibility: canControl, screen: canCapture))

@@ -29,7 +29,7 @@
 		<string>_zarcillo._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Zarcillo usa la cámara para leer texto y escanear pizarras o apuntes hacia tu Mac.</string>
+	<string>Zarcillo usa la cámara para leer texto, escanear pizarras o apuntes hacia tu Mac, y para mover el cursor con la mirada.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Zarcillo busca tu Mac en la red Wi-Fi para controlarlo.</string>
 	<key>NSMicrophoneUsageDescription</key>

@@ -233,28 +233,41 @@ final class ScreenStream: NSObject, SCStreamOutput {
     private let queue = DispatchQueue(label: "zarcillo.screen", qos: .userInteractive)
     private let context = CIContext(options: [.cacheIntermediates: false])
     private(set) var width = 0
+    private(set) var window: String?
     /// Se llama en la cola del stream con cada JPEG listo.
     var onFrame: ((Data) -> Void)?
 
-    func start(width: Int) async {
-        guard width != self.width || stream == nil else { return }
+    /// Toda la pantalla, o solo una ventana (`window` es el id de `Windows`).
+    func start(width: Int, window: String? = nil) async {
+        guard width != self.width || window != self.window || stream == nil else { return }
         await stop()
         do {
-            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first
             else { return }
             let cfg = SCStreamConfiguration()
-            cfg.width = width
-            cfg.height = Int(Double(width) * Double(display.height) / Double(max(display.width, 1)))
             cfg.minimumFrameInterval = CMTime(value: 1, timescale: width > 1200 ? 24 : 20)
             cfg.pixelFormat = kCVPixelFormatType_32BGRA
             cfg.showsCursor = true
             cfg.queueDepth = 3
-            let s = SCStream(filter: SCContentFilter(display: display, excludingWindows: []), configuration: cfg, delegate: nil)
+            let filter: SCContentFilter
+            if let window, let target = Windows.frame(window),
+               let w = Self.match(target, in: content.windows) {
+                filter = SCContentFilter(desktopIndependentWindow: w)
+                cfg.width = width
+                cfg.height = min(2400, Int(Double(width) * w.frame.height / max(w.frame.width, 1)))
+                cfg.showsCursor = false
+            } else {
+                filter = SCContentFilter(display: display, excludingWindows: [])
+                cfg.width = width
+                cfg.height = Int(Double(width) * Double(display.height) / Double(max(display.width, 1)))
+            }
+            let s = SCStream(filter: filter, configuration: cfg, delegate: nil)
             try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
             try await s.startCapture()
             stream = s
             self.width = width
+            self.window = window
         } catch {
             stream = nil
             self.width = 0
@@ -265,6 +278,17 @@ final class ScreenStream: NSObject, SCStreamOutput {
         if let s = stream { try? await s.stopCapture() }
         stream = nil
         width = 0
+        window = nil
+    }
+
+    /// La ventana de ScreenCaptureKit que corresponde a la de Accesibilidad:
+    /// misma app y casi el mismo marco.
+    private static func match(_ t: (pid: pid_t, frame: CGRect, title: String), in windows: [SCWindow]) -> SCWindow? {
+        let mine = windows.filter { $0.owningApplication?.processID == t.pid && $0.windowLayer == 0 }
+        return mine.first { abs($0.frame.minX - t.frame.minX) < 6 && abs($0.frame.minY - t.frame.minY) < 6
+            && abs($0.frame.width - t.frame.width) < 6 }
+            ?? mine.first { $0.title == t.title && !t.title.isEmpty }
+            ?? mine.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -316,6 +340,20 @@ enum Windows {
             }
         }
         return out
+    }
+
+    /// Dónde está la ventana ahora, en coordenadas globales (origen arriba a la izquierda).
+    static func frame(_ id: String) -> (pid: pid_t, frame: CGRect, title: String)? {
+        let parts = id.split(separator: ":")
+        guard parts.count == 2, let pid = pid_t(parts[0]), let index = Int(parts[1]) else { return nil }
+        let wins = axWindows(pid)
+        guard wins.indices.contains(index) else { return nil }
+        let w = wins[index]
+        var pos = CGPoint.zero, size = CGSize.zero
+        if let v: AXValue = attr(w, kAXPositionAttribute) { AXValueGetValue(v, .cgPoint, &pos) }
+        if let v: AXValue = attr(w, kAXSizeAttribute) { AXValueGetValue(v, .cgSize, &size) }
+        guard size.width > 0 else { return nil }
+        return (pid, CGRect(origin: pos, size: size), attr(w, kAXTitleAttribute) ?? "")
     }
 
     @discardableResult
