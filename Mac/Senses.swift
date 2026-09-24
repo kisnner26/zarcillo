@@ -148,8 +148,9 @@ final class PostureCoach: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
     func start() {
         guard !running else { return }
+        running = true
         AVCaptureDevice.requestAccess(for: .video) { ok in
-            guard ok else { return }
+            guard ok else { self.queue.async { self.running = false }; return }
             self.queue.async { self.configure() }
         }
     }
@@ -157,7 +158,8 @@ final class PostureCoach: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     func stop() {
         queue.async {
             self.session.stopRunning()
-            self.running = false
+            // La cámara tarda un momento en figurar como libre: mientras, sigue siendo nuestra.
+            self.queue.asyncAfter(deadline: .now() + 3) { self.running = false }
             self.baseline = nil
             self.samples = []
             self.badSince = nil

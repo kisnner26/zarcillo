@@ -61,34 +61,20 @@ struct MusicStage: View {
     var body: some View {
         let palette = remote.palette ?? .fallback
         GeometryReader { geo in
-            let wide = geo.size.width > geo.size.height * 1.15
+            // Siempre la misma composición, centrada, con medidas fijas: un
+            // título largo se encoge en su renglón en vez de empujar lo demás.
+            let cover = min(geo.size.width * 0.5, geo.size.height * 0.3)
             ZStack {
                 Backdrop(art: remote.artwork, palette: palette)
                 if let np = remote.nowPlaying {
-                    if wide {
-                        HStack(spacing: Space.l) {
-                            Record(art: remote.artwork, palette: palette, playing: np.playing,
-                                   size: min(geo.size.height * 0.62, geo.size.width * 0.32))
-                            VStack(alignment: .leading, spacing: Space.m) {
-                                meta(np, align: .leading)
-                                progress(np, palette)
-                                controls(np, palette)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(.horizontal, Space.l).padding(.vertical, Space.m)
-                    } else {
-                        VStack(spacing: Space.s + 2) {
-                            Spacer(minLength: 0)
-                            Record(art: remote.artwork, palette: palette, playing: np.playing,
-                                   size: min(geo.size.width * 0.5, geo.size.height * 0.3))
-                            meta(np, align: .center)
-                            progress(np, palette)
-                            controls(np, palette)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, Space.l)
+                    VStack(spacing: Space.s + 2) {
+                        Record(art: remote.artwork, palette: palette, playing: np.playing, size: cover)
+                        meta(np, align: .center)
+                        progress(np, palette)
+                        controls(np, palette)
                     }
+                    .padding(.horizontal, Space.l)
+                    .frame(width: geo.size.width, height: geo.size.height)
                 } else {
                     VStack(spacing: Space.s) {
                         Image(systemName: "music.note").font(.system(size: 44, weight: .light))
@@ -148,13 +134,15 @@ struct MusicStage: View {
             Text(np.title)
                 .font(.system(size: 28, weight: .bold, design: .serif))
                 .foregroundStyle(.white)
-                .lineLimit(2)
-                .minimumScaleFactor(0.7)
-                .multilineTextAlignment(align == .center ? .center : .leading)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .frame(height: 36)
             Text(np.artist)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.white.opacity(0.75))
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(height: 22)
         }
         .frame(maxWidth: .infinity, alignment: align == .center ? .center : .leading)
         .contentTransition(.opacity)

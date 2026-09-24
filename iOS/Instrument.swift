@@ -187,6 +187,9 @@ struct Instrument: View {
                 }
             }
         }
+        // El teclado tapa la perilla en vez de aplastar el escenario (si no,
+        // los campos de arriba se montan sobre el botón de volver).
+        .ignoresSafeArea(.keyboard)
         // Los avisos del Mac: una notificación breve arriba, solo cuando hay algo que decir.
         .overlay(alignment: .top) { Toast() }
         .overlay { HarvestFall() }

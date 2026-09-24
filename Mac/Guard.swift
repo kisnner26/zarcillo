@@ -25,6 +25,7 @@ final class Guardian {
     private var workspaceObservers: [NSObjectProtocol] = []
     private var distributedObservers: [NSObjectProtocol] = []
     private let snap = CameraSnap()
+    var usingCamera: Bool { snap.active }
 
     func arm(siren: Bool) {
         self.siren = siren
@@ -125,6 +126,8 @@ final class CameraSnap: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     private var started = Date()
     private var completion: ((Data?) -> Void)?
     private let context = CIContext()
+    /// Mientras saca la foto, la cámara "en uso" es la nuestra, no una videollamada.
+    private(set) var active = false
 
     func take(_ done: @escaping (Data?) -> Void) {
         AVCaptureDevice.requestAccess(for: .video) { ok in
@@ -145,6 +148,7 @@ final class CameraSnap: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
                 out.setSampleBufferDelegate(self, queue: self.queue)
                 if s.canAddOutput(out) { s.addOutput(out) }
                 self.completion = done
+                self.active = true
                 self.started = Date()
                 self.session = s
                 s.startRunning()
@@ -167,6 +171,8 @@ final class CameraSnap: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         completion = nil
         session?.stopRunning()
         session = nil
+        // La cámara tarda un momento en figurar como libre.
+        queue.asyncAfter(deadline: .now() + 3) { self.active = false }
         DispatchQueue.main.async { done(jpeg) }
     }
 }
