@@ -157,7 +157,7 @@ struct GameController: View {
             keys.releaseAll()
             if feel { remote.send(.beats(false)) }
             UIApplication.shared.isIdleTimerDisabled = false
-            Orientation.request(.allButUpsideDown)
+            Orientation.request(.allButUpsideDown, restoring: true)
         }
     }
 

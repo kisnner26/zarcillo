@@ -166,7 +166,7 @@ struct FullScreenMac: View {
             remote.send(.screen(on: true, width: 960))
             // Devolverle el giro al sistema. Pedir "solo vertical" aquí quedaba
             // como un bloqueo y el iPhone ya no giraba a horizontal.
-            Orientation.request(.allButUpsideDown)
+            Orientation.request(.allButUpsideDown, restoring: true)
         }
     }
 }
@@ -444,7 +444,9 @@ struct ForceLandscape<Content: View>: View {
 
     var body: some View {
         GeometryReader { g in
-            let turn = enabled && g.size.height > g.size.width
+            // Solo si el sistema dijo que no puede girar: si gira él, girar también aquí
+            // pondría todo de lado (pasaba en la Duplicación del iPhone).
+            let turn = enabled && OrientationState.shared.refused && g.size.height > g.size.width
             content()
                 .transformEnvironment(\.verticalSizeClass) { if turn { $0 = .compact } }
                 .frame(width: turn ? g.size.height : g.size.width, height: turn ? g.size.width : g.size.height)
@@ -455,27 +457,41 @@ struct ForceLandscape<Content: View>: View {
     }
 }
 
+/// Si el último pedido de orientación lo rechazó el sistema.
+@Observable
+final class OrientationState {
+    static let shared = OrientationState()
+    var refused = false
+}
+
 enum Orientation {
     /// Pide estas orientaciones. `.allButUpsideDown` significa "lo que eligió el
     /// usuario": así, al salir del mando o de la pantalla completa, se vuelve a su preferencia.
-    static func request(_ mask: UIInterfaceOrientationMask) {
+    /// `restoring`: se vuelve de algo que se puso en horizontal (pantalla completa, mando, preferencia).
+    static func request(_ mask: UIInterfaceOrientationMask, restoring: Bool = false) {
         let wanted = mask == .allButUpsideDown ? AppOrientation.current.mask : mask
         // La app nunca prohíbe la vertical: en la Duplicación del iPhone (y con el giro
         // bloqueado) el sistema no puede girar, y prohibirla hacía que iOS cerrara la
         // pantalla completa. El horizontal lo garantiza `ForceLandscape`, que gira el contenido.
         OrientationDelegate.mask = wanted == .portrait ? .portrait : .allButUpsideDown
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        // "Automática" al volver de algo horizontal: primero se vuelve a vertical de verdad
+        // (si no, la Duplicación del iPhone se queda acostada); luego el giro queda libre.
+        let geometry: UIInterfaceOrientationMask = wanted == .allButUpsideDown && restoring ? .portrait : wanted
+        OrientationState.shared.refused = false
         var vc = scene.windows.first?.rootViewController
         while let v = vc {
             v.setNeedsUpdateOfSupportedInterfaceOrientations()
             vc = v.presentedViewController
         }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: wanted)) { _ in }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: geometry)) { _ in
+            DispatchQueue.main.async { OrientationState.shared.refused = true }
+        }
     }
 
     static func set(_ o: AppOrientation) {
         UserDefaults.standard.set(o.rawValue, forKey: "app.orientation")
-        request(.allButUpsideDown)
+        request(.allButUpsideDown, restoring: true)
     }
 }
 
