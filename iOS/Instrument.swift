@@ -232,6 +232,8 @@ struct Instrument: View {
     @StateObject private var voice = VoiceCommander()
     @State private var callLight = false
     @AppStorage("light.auto") private var autoLight = true
+    /// Alto del teclado sobre la pantalla: el escenario sube lo que el teclado invade.
+    @State private var keyboard: CGFloat = 0
 
     var body: some View {
         Group {
@@ -243,6 +245,7 @@ struct Instrument: View {
             } else if landscape {
                 HStack(spacing: Space.m) {
                     Stage().frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.bottom, keyboard)
                     ControlDeck(ring: 100, knob: 100)
                         .frame(width: 330)
                 }
@@ -252,6 +255,8 @@ struct Instrument: View {
                     Stage()
                         .padding(.horizontal, Space.m)
                         .padding(.top, Space.s)
+                        // El teclado cubre la perilla (360 pt); solo lo que pase de ahí sube el escenario.
+                        .padding(.bottom, max(0, keyboard - 360))
                         .frame(maxHeight: .infinity)
                     ControlDeck(ring: 124, knob: 128)
                         .frame(height: 360)
@@ -261,6 +266,12 @@ struct Instrument: View {
         // El teclado tapa la perilla en vez de aplastar el escenario (si no,
         // los campos de arriba se montan sobre el botón de volver).
         .ignoresSafeArea(.keyboard)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            guard let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let screen = UIScreen.main.bounds.height
+            let h = max(0, screen - end.minY)
+            withAnimation(.spring(duration: 0.3)) { keyboard = h }
+        }
         // Los avisos del Mac: una notificación breve arriba, solo cuando hay algo que decir.
         .overlay(alignment: .top) { Toast() }
         .overlay { HarvestFall() }

@@ -11,6 +11,7 @@ struct ZarcilloApp: App {
                 .environmentObject(remote)
                 .preferredColorScheme(.dark)
                 .buttonStyle(PressScale())
+                .scrollDismissesKeyboard(.interactively)
                 .persistentSystemOverlays(.hidden)
                 .onAppear { WatchLink.shared.start(remote) }
         }
