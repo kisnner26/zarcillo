@@ -27,10 +27,21 @@ final class VoiceCommander: ObservableObject {
             self.text += (self.text.isEmpty ? "" : " ") + t
             self.heard = self.text
         }
+        // Nombres de apps y escenas como pistas: el reconocedor acierta "Xcode" o "modo clase".
+        speech.hints = (remote?.apps.map(\.name) ?? []) + (remote?.routines.map(\.name) ?? [])
+            + ["cierra", "abre", "oculta", "volumen", "brillo", "pestaña", "Safari", "Chrome", "Spotify", "YouTube"]
         Task { await speech.start(locale: "es-MX") }
     }
 
     func end() {
+        // Un respiro para que entre la última palabra antes de cortar.
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            finish()
+        }
+    }
+
+    private func finish() {
         speech.stop()
         let order = heard.trimmingCharacters(in: .whitespaces)
         guard !order.isEmpty, let remote else {
@@ -41,7 +52,7 @@ final class VoiceCommander: ObservableObject {
         Task {
             let steps = await plan(order, remote: remote)
             if steps.isEmpty {
-                phase = .failed("no entendí “\(order)”")
+                phase = .failed("no entendí “\(order)”. Prueba: “cierra Fotos”, “sube el volumen a 60”, “busca … en YouTube”")
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             } else {
                 remote.send(.runRoutine(Routine(name: "voz", symbol: "waveform", steps: steps)))
@@ -57,11 +68,15 @@ final class VoiceCommander: ObservableObject {
     // MARK: Entender
 
     private func plan(_ order: String, remote: Remote) async -> [RoutineStep] {
+        // Primero la gramática: rápida, exacta y sin sorpresas ("cierra" nunca es "abre").
+        let grammar = VoiceGrammar(apps: remote.apps, routines: remote.routines).parse(order)
+        if grammar.understood, !grammar.steps.isEmpty { return grammar.steps }
+        // Lo que no entendió, al modelo del iPhone si lo hay.
         if #available(iOS 26.0, *), SystemLanguageModel.default.isAvailable,
            let steps = try? await planWithModel(order, remote: remote), !steps.isEmpty {
             return steps
         }
-        return planWithRules(order, remote: remote)
+        return grammar.steps
     }
 
     @available(iOS 26.0, *)
@@ -69,10 +84,19 @@ final class VoiceCommander: ObservableObject {
         let apps = remote.apps.map(\.name).joined(separator: ", ")
         let scenes = remote.routines.map(\.name).joined(separator: ", ")
         let session = LanguageModelSession(instructions: """
-        Conviertes órdenes en español para controlar un Mac en una lista de pasos.
-        Apps disponibles: \(apps).
-        Escenas disponibles: \(scenes).
-        Usa solo esas apps y escenas. Niveles de volumen y brillo de 0 a 100.
+        Conviertes órdenes habladas en español para controlar un Mac en una lista de pasos, en el orden dicho.
+        Reglas:
+        - "cierra", "cerrar", "sal de", "quita" una app = quitApp. Nunca uses openApp para cerrar.
+        - "abre", "pon", "ve a", "cambia a" una app = openApp. Una página web (youtube, gmail, algo.com) = openURL.
+        - "oculta", "esconde" = hideApp. "cierra todo" = quitAllApps.
+        - "sube"/"baja" el volumen o el brillo sin número = volumeUp/volumeDown/brightnessUp/brightnessDown.
+          Con número ("a 40", "al 40") = volume o brightness con level.
+        - "busca X" = search con target X. "escribe X" = typeText con target X exacto.
+        - pestañas y ventanas: newTab, closeTab, newWindow, closeWindow, minimize, fullScreen.
+        - copy, paste, undo, save, screenshot, lock, sleep, displayOff, missionControl, spotlight.
+        - si el usuario nombra una escena, scene con su nombre.
+        Apps del Dock: \(apps). Escenas: \(scenes).
+        El target de una app es su nombre tal como lo dijo el usuario.
         """)
         let response = try await session.respond(to: order, generating: VoicePlan.self)
         return response.content.steps.flatMap { steps(from: $0, remote: remote) }
@@ -92,12 +116,25 @@ final class VoiceCommander: ObservableObject {
 
     @available(iOS 26.0, *)
     private func step(from s: VoicePlan.Step, remote: Remote) -> RoutineStep? {
+        func key(_ k: String, shift: Bool = false, ctrl: Bool = false, _ title: String) -> RoutineStep {
+            .shortcut(Shortcut(title: title, key: k, command: true, shift: shift, control: ctrl))
+        }
+        let target = s.target?.trimmingCharacters(in: .whitespaces) ?? ""
         switch s.action {
         case .openApp:
-            guard let name = s.target, let app = match(name, in: remote.apps) else { return nil }
-            return .openApp(id: app.id, name: app.name)
+            guard !target.isEmpty else { return nil }
+            if let app = match(target, in: remote.apps) { return .openApp(id: app.id, name: app.name) }
+            return .openAppNamed(target)
+        case .quitApp: return target.isEmpty ? nil : .quitApp(match(target, in: remote.apps)?.name ?? target)
+        case .hideApp: return target.isEmpty ? nil : .hideApp(match(target, in: remote.apps)?.name ?? target)
+        case .quitAllApps: return .quitAllApps
         case .volume: return .volume(Double(min(100, max(0, s.level ?? 50))) / 100)
+        case .volumeUp: return .volumeBy(Double(s.level ?? 15) / 100)
+        case .volumeDown: return .volumeBy(-Double(s.level ?? 15) / 100)
+        case .mute: return .volume(0)
         case .brightness: return .brightness(Double(min(100, max(0, s.level ?? 50))) / 100)
+        case .brightnessUp: return .brightnessBy(Double(s.level ?? 15) / 100)
+        case .brightnessDown: return .brightnessBy(-Double(s.level ?? 15) / 100)
         case .playPause: return .media(.playPause)
         case .nextTrack: return .media(.next)
         case .previousTrack: return .media(.previous)
@@ -107,51 +144,26 @@ final class VoiceCommander: ObservableObject {
         case .missionControl: return .gesture(.missionControl)
         case .spotlight: return .gesture(.spotlight)
         case .openURL:
-            guard let t = s.target else { return nil }
-            return .openURL(t.contains("://") ? t : "https://" + t)
-        case .scene:
-            return nil
+            guard !target.isEmpty else { return nil }
+            return .openURL(target.contains("://") ? target : "https://" + target.replacingOccurrences(of: " ", with: ""))
+        case .search:
+            guard !target.isEmpty else { return nil }
+            return .openURL("https://www.google.com/search?q=" + (target.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? target))
+        case .typeText: return target.isEmpty ? nil : .typeText(target)
+        case .newTab: return key("t", "nueva pestaña")
+        case .closeTab: return key("w", "cerrar pestaña")
+        case .newWindow: return key("n", "nueva ventana")
+        case .closeWindow: return key("w", "cerrar ventana")
+        case .minimize: return key("m", "minimizar")
+        case .fullScreen: return key("f", ctrl: true, "pantalla completa")
+        case .copy: return key("c", "copiar")
+        case .paste: return key("v", "pegar")
+        case .undo: return key("z", "deshacer")
+        case .save: return key("s", "guardar")
+        case .screenshot: return key("3", shift: true, "captura de pantalla")
+        case .openFolder: return target.isEmpty ? nil : .openFolder(target)
+        case .scene: return nil
         }
-    }
-
-    /// Sin modelo: frases separadas por "y" o comas, reconocidas por palabras clave.
-    private func planWithRules(_ order: String, remote: Remote) -> [RoutineStep] {
-        let parts = fold(order)
-            .replacingOccurrences(of: ", y ", with: ",")
-            .replacingOccurrences(of: " y luego ", with: ",")
-            .replacingOccurrences(of: " y ", with: ",")
-            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        var steps: [RoutineStep] = []
-        for p in parts where !p.isEmpty {
-            let number = p.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }.first
-            if p.contains("volumen") {
-                let v = number ?? (p.contains("sube") ? Int(remote.volume * 100) + 20 : Int(remote.volume * 100) - 20)
-                steps.append(.volume(Double(min(100, max(0, v))) / 100))
-            } else if p.contains("brillo") {
-                steps.append(.brightness(Double(min(100, max(0, number ?? 50))) / 100))
-            } else if p.contains("pausa") || p.contains("reproduce") || p.contains("play") {
-                steps.append(.media(.playPause))
-            } else if p.contains("siguiente") {
-                steps.append(.media(.next))
-            } else if p.contains("anterior") {
-                steps.append(.media(.previous))
-            } else if p.contains("bloquea") {
-                steps.append(.power(.lock))
-            } else if p.contains("suspend") || p.contains("duerme") {
-                steps.append(.power(.sleep))
-            } else if p.contains("mission") {
-                steps.append(.gesture(.missionControl))
-            } else if p.contains("spotlight") || p.contains("busca") {
-                steps.append(.gesture(.spotlight))
-            } else if let r = remote.routines.first(where: { p.contains(fold($0.name)) }) {
-                steps += r.steps
-            } else if p.hasPrefix("abre") || p.hasPrefix("abrir") || p.hasPrefix("pon ") {
-                let name = p.replacingOccurrences(of: "abrir", with: "").replacingOccurrences(of: "abre", with: "")
-                    .replacingOccurrences(of: "pon ", with: "").trimmingCharacters(in: .whitespaces)
-                if let app = match(name, in: remote.apps) { steps.append(.openApp(id: app.id, name: app.name)) }
-            }
-        }
-        return steps
     }
 
     private func match(_ name: String, in apps: [AppTile]) -> AppTile? {
@@ -169,17 +181,23 @@ final class VoiceCommander: ObservableObject {
 struct VoicePlan {
     @Generable
     enum Action {
-        case openApp, volume, brightness, playPause, nextTrack, previousTrack
-        case lock, sleep, displayOff, missionControl, spotlight, openURL, scene
+        case openApp, quitApp, hideApp, quitAllApps
+        case volume, volumeUp, volumeDown, mute, brightness, brightnessUp, brightnessDown
+        case playPause, nextTrack, previousTrack
+        case lock, sleep, displayOff, missionControl, spotlight
+        case openURL, search, typeText, openFolder
+        case newTab, closeTab, newWindow, closeWindow, minimize, fullScreen
+        case copy, paste, undo, save, screenshot
+        case scene
     }
 
     @Generable
     struct Step {
         @Guide(description: "Qué hacer en el Mac")
         var action: Action
-        @Guide(description: "Nombre de la app, de la escena o la dirección web, si aplica")
+        @Guide(description: "Nombre de la app, escena, dirección web, texto a buscar o a escribir, o carpeta, si aplica")
         var target: String?
-        @Guide(description: "Nivel de 0 a 100 para volumen o brillo")
+        @Guide(description: "Nivel de 0 a 100 para volumen o brillo; para subir o bajar, cuánto")
         var level: Int?
     }
 

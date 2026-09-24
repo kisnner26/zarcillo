@@ -15,6 +15,8 @@ final class LiveSpeech: ObservableObject {
     /// Nivel de la voz 0…1, para animar.
     @Published private(set) var level: Double = 0
 
+    /// Palabras que conviene reconocer bien (nombres de apps, escenas).
+    var hints: [String] = []
     var onPartial: ((String) -> Void)?
     var onFinal: ((String) -> Void)?
 
@@ -86,6 +88,7 @@ final class LiveSpeech: ObservableObject {
         let r = SFSpeechAudioBufferRecognitionRequest()
         r.shouldReportPartialResults = true
         r.addsPunctuation = true
+        r.contextualStrings = hints
         if recognizer?.supportsOnDeviceRecognition == true { r.requiresOnDeviceRecognition = true }
         box.set(r)
         task = recognizer?.recognitionTask(with: r) { [weak self] result, error in

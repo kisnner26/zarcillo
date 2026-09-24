@@ -132,6 +132,17 @@ enum RoutineStep: Codable, Hashable {
     case gesture(DesktopGesture)
     case power(PowerAction)
     case wait(Double)
+    /// Por nombre, resueltos en el Mac: sirven para apps que no están en el Dock.
+    case openAppNamed(String)
+    case quitApp(String)
+    case hideApp(String)
+    case quitAllApps
+    /// Subir o bajar desde donde esté (−1…1).
+    case volumeBy(Double)
+    case brightnessBy(Double)
+    case typeText(String)
+    /// Descargas, Documentos, Escritorio, Aplicaciones, Imágenes, Música, Películas o la carpeta personal.
+    case openFolder(String)
 
     var label: String {
         switch self {
@@ -155,6 +166,14 @@ enum RoutineStep: Codable, Hashable {
             case .displayOff: "apagar la pantalla"
             }
         case .wait(let s): "esperar \(s.formatted()) s"
+        case .openAppNamed(let n): "abrir \(n)"
+        case .quitApp(let n): "cerrar \(n)"
+        case .hideApp(let n): "ocultar \(n)"
+        case .quitAllApps: "cerrar todas las apps"
+        case .volumeBy(let d): d > 0 ? "subir el volumen" : "bajar el volumen"
+        case .brightnessBy(let d): d > 0 ? "subir el brillo" : "bajar el brillo"
+        case .typeText(let t): "escribir “\(t.count > 30 ? String(t.prefix(30)) + "…" : t)”"
+        case .openFolder(let f): "abrir \(f)"
         }
     }
 
@@ -170,6 +189,14 @@ enum RoutineStep: Codable, Hashable {
         case .gesture(let g): g.symbol
         case .power: "power"
         case .wait: "hourglass"
+        case .openAppNamed: "app.badge"
+        case .quitApp: "xmark.app"
+        case .hideApp: "eye.slash"
+        case .quitAllApps: "xmark.square"
+        case .volumeBy(let d): d > 0 ? "speaker.plus.fill" : "speaker.minus.fill"
+        case .brightnessBy(let d): d > 0 ? "sun.max.fill" : "sun.min.fill"
+        case .typeText: "keyboard"
+        case .openFolder: "folder"
         }
     }
 }

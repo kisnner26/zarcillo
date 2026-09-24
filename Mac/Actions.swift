@@ -284,3 +284,119 @@ enum Apps {
         return (name, NSWorkspace.shared.icon(forFile: url.path))
     }
 }
+
+// MARK: - Apps por nombre
+
+/// Encontrar una app por cómo la dices ("fotos", "música", "chrome", "ajustes"),
+/// abierta o instalada, en español o en inglés.
+enum AppFinder {
+    private static let aliases: [String: [String]] = [
+        "fotos": ["photos"], "musica": ["music", "spotify"], "notas": ["notes"], "calendario": ["calendar"],
+        "mensajes": ["messages"], "correo": ["mail"], "mail": ["correo"], "ajustes": ["system settings", "configuracion del sistema"],
+        "configuracion": ["system settings", "configuracion del sistema"], "recordatorios": ["reminders"],
+        "mapas": ["maps"], "vista previa": ["preview"], "calculadora": ["calculator"], "contactos": ["contacts"],
+        "libros": ["books"], "podcasts": ["podcasts"], "tv": ["tv", "apple tv"], "terminal": ["terminal"],
+        "chrome": ["google chrome"], "code": ["visual studio code"], "vscode": ["visual studio code"],
+        "word": ["microsoft word"], "excel": ["microsoft excel"], "powerpoint": ["microsoft powerpoint"],
+        "teams": ["microsoft teams"], "outlook": ["microsoft outlook"], "whatsapp": ["whatsapp"],
+        "navegador": ["safari", "google chrome", "arc"], "tienda": ["app store"], "grabadora": ["voice memos", "notas de voz"],
+    ]
+
+    static func fold(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .replacingOccurrences(of: ".app", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func candidates(_ spoken: String) -> [String] {
+        let n = fold(spoken)
+        return [n] + (aliases[n] ?? [])
+    }
+
+    private static func score(_ name: String, _ wanted: [String]) -> Int {
+        let f = fold(name)
+        for w in wanted {
+            if f == w { return 3 }
+            if f.hasPrefix(w) || w.hasPrefix(f) { return 2 }
+            if f.contains(w) || (w.count > 3 && w.contains(f)) { return 1 }
+        }
+        return 0
+    }
+
+    /// Entre las apps abiertas con ventana.
+    static func running(_ spoken: String) -> NSRunningApplication? {
+        let wanted = candidates(spoken)
+        return NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier }
+            .map { ($0, score($0.localizedName ?? "", wanted)) }
+            .filter { $0.1 > 0 }
+            .max { $0.1 < $1.1 }?.0
+    }
+
+    /// Entre las instaladas en /Applications, /System/Applications y ~/Applications.
+    static func installed(_ spoken: String) -> URL? {
+        let wanted = candidates(spoken)
+        let fm = FileManager.default
+        let dirs = ["/Applications", "/System/Applications", "/System/Applications/Utilities",
+                    "/Applications/Utilities", fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path]
+        var best: (URL, Int)?
+        for d in dirs {
+            for item in (try? fm.contentsOfDirectory(atPath: d)) ?? [] where item.hasSuffix(".app") {
+                let url = URL(fileURLWithPath: d).appendingPathComponent(item)
+                let names = [item, fm.displayName(atPath: url.path)]
+                let s = names.map { score($0, wanted) }.max() ?? 0
+                if s > (best?.1 ?? 0) { best = (url, s) }
+            }
+        }
+        return best?.0
+    }
+
+    @discardableResult
+    static func open(_ spoken: String) -> String? {
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        if let app = running(spoken), let url = app.bundleURL {
+            NSWorkspace.shared.openApplication(at: url, configuration: config)
+            return app.localizedName
+        }
+        guard let url = installed(spoken) else { return nil }
+        NSWorkspace.shared.openApplication(at: url, configuration: config)
+        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+    }
+
+    static func quit(_ spoken: String) -> String? {
+        guard let app = running(spoken) else { return nil }
+        app.terminate()
+        return app.localizedName
+    }
+
+    static func hide(_ spoken: String) -> String? {
+        guard let app = running(spoken) else { return nil }
+        app.hide()
+        return app.localizedName
+    }
+
+    static func quitAll() {
+        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular
+            && app.bundleIdentifier != Bundle.main.bundleIdentifier && app.bundleIdentifier != "com.apple.finder" {
+            app.terminate()
+        }
+    }
+
+    static func openFolder(_ spoken: String) -> String? {
+        let fm = FileManager.default
+        let n = fold(spoken)
+        let map: [(keys: [String], dir: FileManager.SearchPathDirectory?)] = [
+            (["descarga", "download"], .downloadsDirectory), (["documento", "document"], .documentDirectory),
+            (["escritorio", "desktop"], .desktopDirectory), (["aplicacion", "application", "apps"], .applicationDirectory),
+            (["imagen", "foto", "picture"], .picturesDirectory), (["musica", "music"], .musicDirectory),
+            (["pelicula", "video", "movie"], .moviesDirectory), (["inicio", "personal", "home", "usuario"], nil),
+        ]
+        for m in map where m.keys.contains(where: { n.contains($0) }) {
+            let url = m.dir.flatMap { fm.urls(for: $0, in: .userDomainMask).first } ?? fm.homeDirectoryForCurrentUser
+            NSWorkspace.shared.open(url)
+            return fm.displayName(atPath: url.path)
+        }
+        return nil
+    }
+}

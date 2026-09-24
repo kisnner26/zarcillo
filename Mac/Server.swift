@@ -575,6 +575,27 @@ final class Server: ObservableObject {
                 case .gesture(let g): if Input.isTrusted { Input.gesture(g) }
                 case .power(let p): Power.perform(p)
                 case .wait(let s): try? await Task.sleep(for: .seconds(s))
+                case .openAppNamed(let n):
+                    if AppFinder.open(n) == nil { broadcast(.status("no encontré la app “\(n)” en el Mac")) }
+                case .quitApp(let n):
+                    if let name = AppFinder.quit(n) { hud.showMessage("cerrando \(name)", symbol: "xmark.app") }
+                    else { broadcast(.status("“\(n)” no está abierta")) }
+                case .hideApp(let n):
+                    if AppFinder.hide(n) == nil { broadcast(.status("“\(n)” no está abierta")) }
+                case .quitAllApps:
+                    AppFinder.quitAll()
+                    hud.showMessage("cerrando todo", symbol: "xmark.square")
+                case .volumeBy(let d):
+                    let v = min(1, max(0, (Volume.get() ?? 0.5) + d))
+                    Volume.set(v)
+                    hud.showLevel(.volume, v)
+                case .brightnessBy(let d):
+                    let v = min(1, max(0, (Brightness.get() ?? 0.5) + d))
+                    Brightness.set(v)
+                    hud.showLevel(.brightness, v)
+                case .typeText(let t): if Input.isTrusted { Typing.type(t) }
+                case .openFolder(let f):
+                    if AppFinder.openFolder(f) == nil { broadcast(.status("no sé qué carpeta es “\(f)”")) }
                 }
                 try? await Task.sleep(for: .milliseconds(350))
             }
