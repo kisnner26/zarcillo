@@ -26,12 +26,14 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Zarcillo lee qué suena en Música o Spotify para mostrarlo en tu iPhone.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Zarcillo mide la señal de tu iPhone para bloquear el Mac cuando te alejas.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_zarcillo._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Zarcillo usa la cámara del Mac solo si activas el aviso de postura, y no guarda imágenes.</string>
+	<string>Zarcillo usa la cámara del Mac solo para el aviso de postura, sin guardar imágenes, y para fotografiar a quien toque tu Mac si activas el guardián.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Kisnner Obando</string>
 	<key>NSLocalNetworkUsageDescription</key>

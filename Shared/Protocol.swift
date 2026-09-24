@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 // Lo que viaja entre el iPhone y el Mac. Todo es JSON con un prefijo de largo
@@ -267,6 +268,13 @@ enum Command: Codable {
     case beats(Bool)
     /// Postura: la cámara del Mac vigila si te encorvas.
     case posture(Bool)
+    /// Guardián de biblioteca: el Mac avisa si alguien lo toca, lo desenchufa o lo cierra.
+    case guardian(on: Bool, siren: Bool)
+    case guardianSilence
+    /// Bloqueo por cercanía: el Mac mide la señal Bluetooth del iPhone.
+    case proximity(on: Bool, threshold: Int)
+    /// Brote invitado: un código QR para que un amigo lance fotos desde su navegador.
+    case guest(Bool)
 }
 
 /// Mac → iPhone.
@@ -294,6 +302,10 @@ enum Event: Codable {
     /// La cámara del Mac se está usando (una videollamada).
     case cameraInUse(Bool)
     case postureState(on: Bool, slouching: Bool)
+    case guardianState(on: Bool, siren: Bool)
+    case guardianAlert(reason: String, photo: Data?)
+    case nearState(on: Bool, rssi: Int?, threshold: Int, locked: Bool)
+    case guestPass(url: String?, expires: Double?)
 }
 
 /// Qué parte de la pantalla sigue cada foco.
@@ -388,5 +400,16 @@ enum Fast {
             return Double(Float32(bitPattern: bits))
         }
         return (f(1), f(5))
+    }
+}
+
+/// El iPhone se anuncia por Bluetooth con este servicio; el Mac lo reconoce
+/// por una huella del código de enlace, sin que viaje el código.
+enum NearBeacon {
+    static let service = "7A3E9C51-2B84-4F0D-9E6A-5C1D8B2F4A63"
+    static let token = "7A3E9C52-2B84-4F0D-9E6A-5C1D8B2F4A63"
+
+    static func token(passcode: String) -> Data {
+        Data(SHA256.hash(data: Data("zarcillo-cerca-\(passcode)".utf8)).prefix(12))
     }
 }

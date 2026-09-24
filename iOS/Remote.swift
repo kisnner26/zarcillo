@@ -96,6 +96,21 @@ final class Remote: ObservableObject {
     @Published private(set) var cameraInUse = false
     @Published private(set) var postureOn = false
     @Published private(set) var slouching = false
+    /// Guardián de biblioteca.
+    @Published private(set) var guardianOn = false
+    @Published private(set) var guardianSiren = true
+    @Published private(set) var alarm: GuardianAlarm?
+    @Published private(set) var alarms: [GuardianAlarm] = []
+    let siren = Siren()
+    /// Bloqueo por cercanía.
+    @Published private(set) var nearOn = false
+    @Published private(set) var nearRSSI: Int?
+    @Published private(set) var nearThreshold = -72
+    @Published private(set) var nearLocked = false
+    let beacon = PhoneBeacon()
+    /// Brote invitado.
+    @Published private(set) var guestURL: String?
+    @Published private(set) var guestExpires: Date?
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
     private var pendingMove = CGVector.zero
@@ -284,6 +299,8 @@ final class Remote: ObservableObject {
     }
 
     private func lost() {
+        // Con el guardián activo, perder al Mac también es una alarma.
+        if guardianOn { raise("perdí la conexión con el Mac") }
         channel?.cancel()
         channel = nil
         guard let t = target else { found(macs); return }
@@ -374,6 +391,29 @@ final class Remote: ObservableObject {
         case .postureState(let on, let bad):
             postureOn = on
             slouching = bad
+        case .guardianState(let on, let sirenOn):
+            guardianOn = on
+            guardianSiren = sirenOn
+            siren.keepAlive(on)
+        case .guardianAlert(let reason, let photo):
+            let img = photo.flatMap { UIImage(data: $0) }
+            // La foto llega después del aviso: se suma al mismo.
+            if let img, let last = alarms.last, last.reason == reason, Date().timeIntervalSince(last.at) < 30 {
+                alarms[alarms.count - 1].photo = img
+                if alarm?.id == last.id { alarm?.photo = img }
+                return
+            }
+            raise(reason, photo: img)
+        case .nearState(let on, let rssi, let threshold, let locked):
+            nearOn = on
+            nearRSSI = rssi
+            nearThreshold = threshold
+            nearLocked = locked
+            if on, let code = Keychain.get(macName) { beacon.start(token: NearBeacon.token(passcode: code)) }
+            if !on { beacon.stop() }
+        case .guestPass(let url, let expires):
+            guestURL = url
+            guestExpires = expires.map { Date(timeIntervalSince1970: $0) }
         case .frontApp(let id, let name):
             frontAppID = id
             frontAppName = name
@@ -385,6 +425,41 @@ final class Remote: ObservableObject {
     }
 
     // MARK: Funciones
+
+    func setGuardian(_ on: Bool, siren sirenOn: Bool? = nil) {
+        if on { Notify.ask() }
+        guardianOn = on
+        if let sirenOn { guardianSiren = sirenOn }
+        siren.keepAlive(on)
+        send(.guardian(on: on, siren: guardianSiren))
+    }
+
+    private func raise(_ reason: String, photo: UIImage? = nil) {
+        let a = GuardianAlarm(reason: reason, photo: photo, at: Date())
+        alarms.append(a)
+        if alarms.count > 20 { alarms.removeFirst() }
+        guard alarm == nil else { return }
+        withAnimation(.spring(duration: 0.3)) { alarm = a }
+        siren.ring()
+        Notify.now("Alguien está en tu Mac", reason)
+    }
+
+    func silenceAlarm() {
+        withAnimation(.easeOut(duration: 0.25)) { alarm = nil }
+        siren.stopRing(keepAlive: guardianOn)
+        send(.guardianSilence)
+    }
+
+    func setNear(_ on: Bool, threshold: Int) {
+        nearOn = on
+        nearThreshold = threshold
+        if on, let code = Keychain.get(macName) {
+            beacon.start(token: NearBeacon.token(passcode: code))
+        } else if !on {
+            beacon.stop()
+        }
+        send(.proximity(on: on, threshold: threshold))
+    }
 
     /// Copia el portapapeles del iPhone al Mac. Leerlo hace que iOS pregunte la
     /// primera vez si Zarcillo puede pegar.

@@ -24,6 +24,9 @@ final class Server: ObservableObject {
     private let posture = PostureCoach()
     private var cameraBusy = false
     private var slouching = false
+    let guardian = Guardian()
+    let near = ProximityLock()
+    let guest = GuestSprout()
     let macName = Host.current().localizedName ?? "Mac"
 
     /// Clientes que están mirando la pantalla en vivo.
@@ -96,6 +99,28 @@ final class Server: ObservableObject {
                 self?.hud.showMessage("endereza la espalda", symbol: "figure.stand")
             }
         }
+        guardian.onAlert = { [weak self] reason, photo in
+            guard let self else { return }
+            self.broadcast(.guardianAlert(reason: reason, photo: photo))
+        }
+        near.passcode = passcode
+        near.onChange = { [weak self] in self?.broadcastNear() }
+        near.onReturn = { [weak self] in
+            // Enciende la pantalla, lista para Touch ID.
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
+            p.arguments = ["-u", "-t", "2"]
+            try? p.run()
+            self?.hud.showMessage("bienvenido de vuelta", symbol: "hand.wave.fill")
+        }
+        near.start()
+        guest.onPhoto = { [weak self] data, name in
+            guard let self else { return }
+            self.photos.receive(data)
+            self.hud.showMessage("\(name) te lanzó una foto", symbol: "leaf.fill")
+            self.broadcast(.status("\(name) lanzó una foto al Mac"))
+        }
+        guest.onChange = { [weak self] in self?.broadcastGuest() }
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.broadcastFrontApp() }
@@ -113,6 +138,7 @@ final class Server: ObservableObject {
     func regenerate() {
         passcode = Self.newCode()
         UserDefaults.standard.set(passcode, forKey: "passcode")
+        near.passcode = passcode
         start()
     }
 
@@ -228,6 +254,9 @@ final class Server: ObservableObject {
             reply(key, .capabilities(touchBar: TouchBarController.hasTouchBar))
             reply(key, .touchBarConfig(TouchBarController.config))
             reply(key, .lights(devices: lights.devices, ambient: lights.ambient, brightness: lights.brightness))
+            reply(key, .guardianState(on: guardian.armed, siren: guardian.siren))
+            reply(key, .nearState(on: near.on, rssi: near.rssi, threshold: near.threshold, locked: near.locked))
+            reply(key, .guestPass(url: guest.url, expires: guest.expires?.timeIntervalSince1970))
             if let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier {
                 reply(key, .frontApp(id: id, name: app.localizedName ?? ""))
             }
@@ -427,6 +456,22 @@ final class Server: ObservableObject {
             broadcast(.postureState(on: on, slouching: false))
             hud.showMessage(on ? "cuidando tu postura" : "postura en pausa", symbol: "figure.stand")
 
+        case .guardian(let on, let siren):
+            if on { guardian.arm(siren: siren) } else { guardian.disarm() }
+            guardian.setSiren(siren)
+            broadcast(.guardianState(on: guardian.armed, siren: guardian.siren))
+            hud.showMessage(on ? "guardián activo" : "guardián en reposo", symbol: on ? "lock.shield.fill" : "shield")
+
+        case .guardianSilence:
+            guardian.silence()
+
+        case .proximity(let on, let threshold):
+            near.configure(on: on, threshold: threshold)
+
+        case .guest(let on):
+            if on { guest.open(macName: macName) } else { guest.close() }
+            hud.showMessage(on ? "brote invitado abierto" : "brote invitado cerrado", symbol: "qrcode")
+
         case .photo(let data):
             photos.receive(data)
             reply(key, .status("foto recibida en el Mac"))
@@ -437,6 +482,14 @@ final class Server: ObservableObject {
         guard let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
               id != Bundle.main.bundleIdentifier else { return }
         broadcast(.frontApp(id: id, name: app.localizedName ?? ""))
+    }
+
+    private func broadcastNear() {
+        broadcast(.nearState(on: near.on, rssi: near.rssi, threshold: near.threshold, locked: near.locked))
+    }
+
+    private func broadcastGuest() {
+        broadcast(.guestPass(url: guest.url, expires: guest.expires?.timeIntervalSince1970))
     }
 
     private func broadcastLights() {

@@ -50,12 +50,15 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
+    case classes, photos, send, scan, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .classes: "clases"
+        case .guardian: "guardián"
+        case .near: "cercanía"
+        case .guest: "invitado"
         case .compass: "brújula"
         case .callLight: "luz de llamada"
         case .posture: "postura"
@@ -77,6 +80,9 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .classes: "transcribe y traduce en vivo"
+        case .guardian: "si alguien toca tu Mac, suena"
+        case .near: "se bloquea cuando te alejas"
+        case .guest: "un amigo lanza fotos con un QR"
         case .compass: "apunta a una ventana del Mac"
         case .callLight: "tu iPhone te ilumina en videollamadas"
         case .posture: "la cámara del Mac te avisa si te encorvas"
@@ -98,6 +104,9 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .classes: "waveform"
+        case .guardian: "lock.shield"
+        case .near: "wave.3.right"
+        case .guest: "qrcode"
         case .compass: "location.north.line"
         case .callLight: "light.max"
         case .posture: "figure.stand"
@@ -174,6 +183,11 @@ struct Instrument: View {
         .overlay { HarvestFall() }
         .overlay(alignment: .top) { VoiceOverlay(voice: voice).padding(.top, Space.s) }
         .fullScreenCover(isPresented: $callLight) { CallLight(shown: $callLight) }
+        .overlay {
+            if let a = remote.alarm {
+                AlarmView(alarm: a).transition(.opacity)
+            }
+        }
         .onChange(of: remote.cameraInUse) { _, busy in
             if autoLight { callLight = busy }
         }
@@ -1016,6 +1030,9 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .classes: ClassesPage()
+        case .guardian: GuardianPage()
+        case .near: NearPage()
+        case .guest: GuestPage()
         case .compass: CompassPage()
         case .callLight: CallLightPage()
         case .posture: PosturePage()
