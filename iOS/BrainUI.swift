@@ -80,14 +80,15 @@ struct BrainOverlay: View {
                     Text(d.reply).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(Tone.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(d.source == "grafo" ? "lo recordaba · sin gastar Claude" : "Claude")
-                        .font(.system(size: 10, weight: .bold)).textCase(.uppercase).tracking(1)
+                        .font(.system(size: 11, weight: .bold)).textCase(.uppercase).tracking(1)
                         .foregroundStyle(d.source == "grafo" ? Tone.leaf : Tone.ink.opacity(0.45))
                 }
                 Spacer(minLength: 0)
                 Button { remote.dismissBrain() } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.4))
-                        .frame(width: 30, height: 30)
+                        .frame(width: 44, height: 44)
                 }
+                .accessibilityLabel("cerrar")
             }
             if let out = d.output, !out.isEmpty, !d.reply.contains(out.prefix(20)) {
                 Text(out).font(.system(size: 11, design: .monospaced)).foregroundStyle(Tone.ink.opacity(0.8))
@@ -187,10 +188,10 @@ struct BrainPage: View {
                             Spacer(minLength: 0)
                             VStack(alignment: .trailing, spacing: 4) {
                                 if i.fixed {
-                                    Text("fijo").font(.system(size: 10, weight: .bold)).foregroundStyle(Tone.onEmber)
+                                    Text("fijo").font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.onEmber)
                                         .padding(.horizontal, 8).frame(height: 20).background(Capsule().fill(Tone.leaf))
                                 }
-                                Text("\(i.uses) uso\(i.uses == 1 ? "" : "s")").font(.system(size: 10)).foregroundStyle(Tone.ink.opacity(0.45))
+                                Text("\(i.uses) uso\(i.uses == 1 ? "" : "s")").font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.45))
                             }
                             Button { remote.send(.brainForget(intent: i.id)) } label: {
                                 Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.4))
@@ -219,7 +220,7 @@ struct BrainPage: View {
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
             Text(value).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Tone.ember)
-            Text(label).font(.system(size: 10)).foregroundStyle(Tone.ink.opacity(0.5)).multilineTextAlignment(.center)
+            Text(label).font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.5)).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(.vertical, Space.s)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))

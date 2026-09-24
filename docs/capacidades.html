@@ -1,0 +1,92 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Zarcillo — qué puede hacer</title>
+<style>
+@page{size:A4;margin:16mm 15mm}
+*{box-sizing:border-box}
+body{font:10.5pt/1.5 -apple-system,"Helvetica Neue",Arial,sans-serif;color:#1d1a1c;margin:0}
+.cover{background:#161214;color:#f3e9ee;padding:38mm 16mm 20mm;margin:-16mm -15mm 10mm;height:120mm}
+.cover h1{font-size:44pt;margin:0;letter-spacing:-1px;color:#ff6fa8}
+.cover p{font-size:14pt;max-width:130mm;color:#d9c8d0}
+.cover small{color:#8f7c86}
+h2{font-size:15pt;margin:0 0 3mm;color:#c2306f;border-bottom:1.5px solid #f4c6da;padding-bottom:1.5mm;break-after:avoid}
+h3{font-size:11pt;margin:4mm 0 1mm}
+section{margin-bottom:8mm}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm 6mm}
+.card{border:1px solid #ecd5df;border-radius:3mm;padding:3mm 4mm;break-inside:avoid;background:#fff9fb}
+.card b{color:#c2306f}
+.card p{margin:1mm 0 0;font-size:9.6pt}
+ul{margin:1mm 0 0;padding-left:5mm}li{margin:.5mm 0}
+.tag{display:inline-block;font-size:8pt;padding:.3mm 2mm;border-radius:5mm;background:#ffe1ee;color:#a3245b;margin-left:1mm}
+.note{background:#f6f1f3;border-left:3px solid #c2306f;padding:3mm 4mm;border-radius:1mm;font-size:9.6pt;break-inside:avoid}
+table{border-collapse:collapse;width:100%;font-size:9.6pt}td,th{border:1px solid #ecd5df;padding:1.5mm 2.5mm;text-align:left;vertical-align:top}th{background:#ffe9f2}
+</style>
+<div class="cover"><h1>Zarcillo</h1>
+<p>Tu iPhone y tu Apple Watch como control remoto del Mac, con un cerebro que aprende de lo que le pides.</p>
+<small>Resumen de capacidades · estado a 24 de septiembre de 2026<br>iPhone (iOS 18+) · Mac (macOS 15+) · Apple Watch (watchOS 11+, compilado, sin instalar)</small></div>
+
+<section><h2>1 · Cómo funciona</h2>
+<p>Una app de barra de menús en el Mac y una app en el iPhone se conectan por tu Wi-Fi, sin servidores ni cuentas. El Mac se anuncia por Bonjour y la conexión va cifrada (TLS con clave precompartida derivada de un código de 6 dígitos que se muestra en el Mac). Diseño: cerámica oscura con acento rosa, igual en iPhone y Mac; el acento se puede cambiar.</p></section>
+
+<section><h2>2 · Control del Mac desde el iPhone</h2><div class="grid">
+<div class="card"><b>Pad</b><p>Trackpad con clic, doble clic, clic derecho, scroll con inercia y arrastre. Teclado remoto en vivo (escribir o dictar), portapapeles bidireccional (texto e imágenes) y atajos propios.</p></div>
+<div class="card"><b>Apps</b><p>Las apps del Dock con su icono; un toque las abre y con pulsación larga saltas a una ventana concreta. Escenas en la parte superior.</p></div>
+<div class="card"><b>Botones adaptables</b><p>Lee la barra de menús real de la app al frente (Accesibilidad) y muestra: esenciales (perfil curado o los atajos que esa app tenga), los más usados, todos sus menús y búsqueda. Comparte lógica con la Touch Bar.</p></div>
+<div class="card"><b>Música</b><p>Carátula, título, barra para adelantar, controles y volumen de Música o Spotify. Reproductor simétrico, sin cambios de tamaño.</p></div>
+<div class="card"><b>Pantalla</b><p>El Mac en vivo en el iPhone. Tocar hace clic, mantener hace clic derecho. Cosechar: zoom sobre cualquier zona de la pantalla. Desprender: una ventana concreta del Mac en tu mano.</p></div>
+<div class="card"><b>Dial, gestos y energía</b><p>Volumen y brillo con háptico. Escritorios, Mission Control, ventanas de la app, Spotlight. Bloquear, apagar pantalla, suspender.</p></div>
+<div class="card"><b>Láser y brújula</b><p>Apuntas girando el iPhone y el Mac dibuja un punto de luz; flechas para diapositivas. La brújula apunta a una ventana del Mac.</p></div>
+<div class="card"><b>Mezclador</b><p>Volumen independiente por app (captura de audio por proceso de CoreAudio).</p></div>
+<div class="card"><b>Touch Bar</b><p>Elige qué muestra la del Mac, incluido un espacio que se adapta a la app activa.</p></div>
+<div class="card"><b>Escenas y atajos</b><p>Secuencias de un toque: abrir apps o páginas, volumen, brillo, música, teclas, gestos, atajos de la app Atajos, esperas. Siri, Atajos y botón de Acción sin abrir la app.</p></div>
+</div></section>
+
+<section><h2>3 · Cerebro: Claude + grafo que aprende <span class="tag">nuevo</span></h2>
+<p>Las órdenes de voz o escritas pasan por tres capas, de la más barata a la más cara:</p>
+<table><tr><th>Capa</th><th>Quién</th><th>Coste</th></tr>
+<tr><td>1</td><td>Gramática local en español (en el iPhone): abrir/cerrar apps, volumen, brillo, música, energía…</td><td>gratis, instantánea</td></tr>
+<tr><td>2</td><td>Grafo de intenciones aprendidas en el Mac: plantillas con huecos (p. ej. <i>abre {app} y luego ciérrala</i>)</td><td>sin Claude (~0,7 s)</td></tr>
+<tr><td>3</td><td>Claude, con tu suscripción (sesión del Claude CLI ya iniciada en el Mac; Zarcillo no toca credenciales)</td><td>~5 s y unos 2000 tokens por consulta</td></tr></table>
+<ul>
+<li><b>Aprende solo:</b> lo que Claude resuelve y es repetible se guarda en tu Mac; a la segunda vez ya no lo consulta. Tras 2 usos queda «fijo».</li>
+<li><b>Seguridad:</b> pasos con AppleScript, comandos de terminal o cerrar todo piden confirmación y muestran el código exacto. Tras dos aprobaciones esa acción se considera de confianza. El riesgo lo decide el código, no el modelo.</li>
+<li><b>Sugerencias:</b> según lo que sueles hacer después y la app al frente, ofrece botones de un toque.</li>
+<li><b>Control:</b> página «cerebro» con estado de Claude, interruptor para usarlo o no, campo de texto, tokens ahorrados, lista de lo aprendido (borrable) y «no era eso» para olvidar una respuesta mala.</li></ul></section>
+
+<section><h2>4 · Voz</h2>
+<p>Dictado en el dispositivo y gramática determinista en español (distingue abrir de cerrar, ocultar, subir/bajar, encadenar con «y luego», carpetas, texto a escribir). Lo que la gramática no entiende se manda al cerebro. Antes había un respaldo con Apple FoundationModels que se mantiene como reserva sin conexión.</p></section>
+
+<section><h2>5 · Cámara, sensores y seguridad</h2><div class="grid">
+<div class="card"><b>Guardián</b><p>Si alguien toca o mueve el Mac, suena la alarma; se puede silenciar desde el iPhone.</p></div>
+<div class="card"><b>Cercanía</b><p>El Mac se bloquea cuando te alejas (umbral configurable).</p></div>
+<div class="card"><b>Postura</b><p>La cámara del Mac avisa si te encorvas.</p></div>
+<div class="card"><b>Mirada</b><p>El cursor sigue tus ojos.</p></div>
+<div class="card"><b>Luz de llamada</b><p>El iPhone te ilumina en videollamadas.</p></div>
+<div class="card"><b>Soplar y música</b><p>Soplar al micrófono actúa como gesto; «sentir la música» convierte los graves en vibración.</p></div>
+<div class="card"><b>Invitado</b><p>Un amigo lanza fotos a tu Mac escaneando un QR, sin instalar nada.</p></div>
+<div class="card"><b>Centro de permisos</b><p>Muestra qué permisos tiene y cuáles faltan (Accesibilidad, pantalla, cámara, Bluetooth, automatización) y los pide desde el iPhone.</p></div>
+</div></section>
+
+<section><h2>6 · Fotos, archivos y capturas</h2><div class="grid">
+<div class="card"><b>Fotos al Mac</b><p>Las «tiras» con gesto de lanzamiento y aparecen como hojas en el escritorio.</p></div>
+<div class="card"><b>Enviar</b><p>Archivos, links y texto del iPhone al Mac.</p></div>
+<div class="card"><b>Escanear</b><p>Páginas a PDF, pizarra a PDF, texto al cursor.</p></div>
+<div class="card"><b>Capturas Mac → iPhone</b><p>Cada captura de pantalla que haces en el Mac llega sola al iPhone, lista para compartir o reutilizar.</p></div>
+<div class="card"><b>Agarrar</b><p>Fotos, links o recursos de la Mac pasan al iPhone con el gesto de lanzamiento.</p></div>
+<div class="card"><b>Clases</b><p>Transcribe y traduce en vivo una clase, con marcas de tiempo.</p></div>
+</div></section>
+
+<section><h2>7 · Luces</h2>
+<p>Luces Govee por red local que siguen los colores de la pantalla (modo ambiente), brillo, zonas e identificar cada luz. Requiere activar «LAN Control» en la app de Govee.</p></section>
+
+<section><h2>8 · Apple Watch</h2>
+<p>La app de reloj está construida (mano, música, gesto de lanzamiento para pasar fotos entre iPhone y Mac, con el reloj como intermediario). <b>No está instalada:</b> el Mac no logra ver el reloj (fallo de watchOS 27 / Xcode 27 beta al reconectar tras el emparejamiento). Está documentado en un repositorio público y en el informe FB24924229 de Apple; un vigilante la instalará si el reloj reaparece.</p></section>
+
+<section><h2>9 · Limitaciones honestas</h2>
+<ul>
+<li>El reloj no tiene la app instalada (ver arriba).</li>
+<li>Pantalla en vivo, guardián, cercanía, mirada, soplar, luz de llamada, Touch Bar y los botones nuevos aún no se han verificado a mano en el iPhone real; el cerebro solo se probó de extremo a extremo en el lado del Mac.</li>
+<li>Widgets, Live Activity / Dynamic Island y compartir desde la hoja de compartir están bloqueados hasta que la cuenta gratuita de Apple libere App IDs (≈ 27 de septiembre).</li>
+<li>No hay Wake-on-LAN (macOS ya no expone la dirección física); despertar depende de un HomePod o Apple TV.</li>
+<li>El brillo usa un framework privado de macOS.</li>
+<li>El uso de la suscripción de Claude por herramientas de terceros puede no estar cubierto por los términos de Anthropic; la clave de API es la alternativa inequívoca.</li>
+</ul></section>
+</html>

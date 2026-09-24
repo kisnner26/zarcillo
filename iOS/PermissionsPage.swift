@@ -40,7 +40,7 @@ struct PermissionsPage: View {
                 HStack(spacing: 6) {
                     Text(kind.title).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(Tone.ink)
                     if kind.isOptional {
-                        Text("opcional").font(.system(size: 10, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.4))
+                        Text("opcional").font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.4))
                     }
                 }
                 Text(kind.detail).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.55))

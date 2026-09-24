@@ -290,7 +290,7 @@ struct Toast: View {
     var body: some View {
         if let text = remote.pill {
             HStack(spacing: 6) {
-                Image(systemName: "sparkle").font(.system(size: 10, weight: .bold)).foregroundStyle(Tone.ember)
+                Image(systemName: "sparkle").font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.ember)
                 Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ink).lineLimit(1)
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
@@ -321,6 +321,7 @@ struct LandscapeScreen: View {
                     .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(.black.opacity(0.45)))
+                    .frame(width: 44, height: 44)
             }
             .accessibilityLabel("salir de la pantalla del Mac")
             .padding(Space.s)
@@ -1518,7 +1519,7 @@ struct DeckStage: View {
                 Text(action.title).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Tone.ink.opacity(action.enabled ? 0.9 : 0.4))
                     .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.8)
-                Text(subtitle ?? action.glyphs).font(.system(size: 10, weight: .medium, design: .rounded))
+                Text(subtitle ?? action.glyphs).font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(Tone.ink.opacity(0.4)).lineLimit(1)
             }
             .padding(.horizontal, 6)
@@ -1526,7 +1527,7 @@ struct DeckStage: View {
             .background(Keycap(on: action.marked))
             .overlay(alignment: .topTrailing) {
                 if action.marked {
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(Tone.ember).padding(8)
+                    Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(Tone.ember).padding(8)
                 }
             }
             .opacity(action.enabled ? 1 : 0.6)

@@ -115,8 +115,10 @@ struct EdgeTicks: View {
 struct PressScale: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
+            .contentShape(Rectangle())
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.spring(duration: 0.22, bounce: 0.25), value: configuration.isPressed)
     }
 }
 

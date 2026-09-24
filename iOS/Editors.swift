@@ -121,7 +121,7 @@ struct RoutineList: View {
                     Text(r.name).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
                     HStack(spacing: 5) {
                         ForEach(Array(r.steps.prefix(6).enumerated()), id: \.offset) { _, step in
-                            Image(systemName: step.symbol).font(.system(size: 10, weight: .semibold))
+                            Image(systemName: step.symbol).font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(Tone.ink.opacity(0.7))
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Tone.recess))
@@ -336,7 +336,7 @@ struct StepPicker: View {
                                         if let img = remote.icons[app.id] {
                                             Image(uiImage: img).resizable().frame(width: 46, height: 46)
                                         }
-                                        Text(app.name).font(.system(size: 10, weight: .medium))
+                                        Text(app.name).font(.system(size: 11, weight: .medium))
                                             .foregroundStyle(Tone.ink.opacity(0.7)).lineLimit(1)
                                     }
                                 }
@@ -652,7 +652,7 @@ struct ShortcutForm: View {
         } label: {
             VStack(spacing: 2) {
                 Text(glyph).font(.system(size: 22, weight: .semibold))
-                Text(name).font(.system(size: 10, weight: .semibold))
+                Text(name).font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(value.wrappedValue ? Tone.ember : Tone.ink.opacity(0.7))
             .frame(maxWidth: .infinity).frame(height: 62)
