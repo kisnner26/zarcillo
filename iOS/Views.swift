@@ -727,11 +727,6 @@ struct PadPage: View {
         ZStack {
             RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Tone.ink.opacity(0.1))
             RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(Tone.ink.opacity(0.2), lineWidth: 1)
-            Text("un dedo mueve · toque = clic · dos toques = doble clic\ndos dedos desplazan · toque con dos a la vez = clic derecho\ntoca y arrastra, o mantén, para arrastrar")
-                .font(.system(size: 11, weight: .medium))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Tone.ink.opacity(0.4))
-                .allowsHitTesting(false)
             Trackpad(remote: remote)
         }
     }
