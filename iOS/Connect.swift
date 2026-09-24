@@ -29,11 +29,12 @@ enum ConnectStage {
     }
 }
 
-/// Un iPhone abajo, un Mac arriba y una enredadera que crece de uno al otro: es
-/// lo que hace la app. Busca (se mece), elige, pide el código (casi llega) y se
-/// agarra al conectar (se enrosca en el Mac y la pantalla se enciende).
+/// Un Mac arriba, un iPhone abajo y una enredadera que sube de uno al otro: es
+/// lo que hace la app. Se dibuja siempre con la misma proporción (0.78) para que
+/// nada se deforme, y todo es simétrico respecto al centro.
 struct VineScene: View {
     let stage: ConnectStage
+    static let aspect: CGFloat = 0.78
     private let growth = Growth()
 
     var body: some View {
@@ -44,153 +45,201 @@ struct VineScene: View {
                 draw(&ctx, size, t, g)
             }
         }
+        .aspectRatio(Self.aspect, contentMode: .fit)
         .accessibilityHidden(true)
     }
 
-    // Puntos de la escena en coordenadas 0…1.
-    private let p0 = CGPoint(x: 0.27, y: 0.66)
-    private let p1 = CGPoint(x: 0.22, y: 0.40)
-    private let p2 = CGPoint(x: 0.62, y: 0.58)
-    private let p3 = CGPoint(x: 0.71, y: 0.37)
+    private var lit: Bool { stage == .connecting }
 
-    private func bezier(_ u: Double, _ size: CGSize) -> CGPoint {
+    // Geometría (fracciones del ancho w y el alto h).
+    private func screenRect(_ w: Double, _ h: Double) -> CGRect { CGRect(x: w * 0.12, y: h * 0.03, width: w * 0.76, height: h * 0.34) }
+    private func phoneRect(_ w: Double, _ h: Double) -> CGRect { CGRect(x: w * 0.395, y: h * 0.72, width: w * 0.21, height: h * 0.275) }
+
+    /// El tallo: de la parte de arriba del iPhone a la base del Mac, en S.
+    private func stem(_ u: Double, _ w: Double, _ h: Double) -> CGPoint {
+        let p0 = CGPoint(x: 0.5, y: 0.72), p1 = CGPoint(x: 0.24, y: 0.63)
+        let p2 = CGPoint(x: 0.76, y: 0.50), p3 = CGPoint(x: 0.5, y: 0.405)
         let a = pow(1 - u, 3), b = 3 * u * pow(1 - u, 2), c = 3 * u * u * (1 - u), d = u * u * u
-        return CGPoint(x: (a * p0.x + b * p1.x + c * p2.x + d * p3.x) * size.width,
-                       y: (a * p0.y + b * p1.y + c * p2.y + d * p3.y) * size.height)
+        return CGPoint(x: (a * p0.x + b * p1.x + c * p2.x + d * p3.x) * w, y: (a * p0.y + b * p1.y + c * p2.y + d * p3.y) * h)
     }
 
     private func draw(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: TimeInterval, _ g: Double) {
         let w = size.width, h = size.height
-        let ember = Tone.ember
-        let lit = g > 0.95 || stage == .connecting
+        let screen = screenRect(w, h)
 
-        // Resplandor detrás del Mac.
-        ctx.fill(Path(ellipseIn: CGRect(x: w * 0.30, y: -h * 0.1, width: w * 0.85, height: h * 0.8)),
-                 with: .radialGradient(Gradient(colors: [ember.opacity(lit ? 0.34 : 0.14), .clear]),
-                                       center: CGPoint(x: w * 0.71, y: h * 0.22), startRadius: 0, endRadius: w * 0.5))
+        // Halo detrás del Mac: más fuerte al conectar.
+        let halo = w * 0.62
+        ctx.fill(Path(ellipseIn: CGRect(x: screen.midX - halo, y: screen.midY - halo, width: halo * 2, height: halo * 2)),
+                 with: .radialGradient(Gradient(colors: [Tone.ember.opacity(lit ? 0.30 : 0.12), .clear]),
+                                       center: CGPoint(x: screen.midX, y: screen.midY), startRadius: 0, endRadius: halo))
 
-        // Luciérnagas.
-        for k in 0..<16 {
-            let a = frac(Double(k) * 0.618), b = frac(Double(k) * 0.382 + 0.3)
-            let x = (a + 0.03 * sin(t * 0.5 + Double(k))) * w
-            let y = (b + 0.03 * cos(t * 0.6 + Double(k) * 2)) * h
-            let glow = 0.15 + 0.25 * (0.5 + 0.5 * sin(t * 1.3 + Double(k) * 1.7))
-            ctx.fill(Path(ellipseIn: CGRect(x: x - 1.8, y: y - 1.8, width: 3.6, height: 3.6)), with: .color(ember.opacity(glow)))
+        // Polen flotando.
+        for k in 0..<18 {
+            let a = frac(Double(k) * 0.618 + 0.1), b = frac(Double(k) * 0.414 + 0.2)
+            let x = (a + 0.025 * sin(t * 0.5 + Double(k))) * w
+            let y = (b + 0.02 * cos(t * 0.6 + Double(k) * 2)) * h
+            let glow = 0.12 + 0.22 * (0.5 + 0.5 * sin(t * 1.3 + Double(k) * 1.7))
+            ctx.fill(Path(ellipseIn: CGRect(x: x - 1.6, y: y - 1.6, width: 3.2, height: 3.2)), with: .color(Tone.ember.opacity(glow)))
         }
 
-        mac(&ctx, size, t, lit)
-        phone(&ctx, size, t)
-
-        // El tallo, de la base del iPhone hacia el Mac, meciéndose.
-        let steps = max(2, Int(70 * g))
-        var pts: [CGPoint] = []
-        for i in 0...steps {
-            let u = g * Double(i) / Double(steps)
-            var p = bezier(u, size)
-            let sway = sin(t * 1.1 + u * 7) * 6 * u * (lit ? 0.3 : 1)
-            p.x += sway
-            pts.append(p)
-        }
-        let green = Color(hue: 0.33, saturation: 0.5, brightness: 0.78)
-        for i in 1..<pts.count {
-            var seg = Path(); seg.move(to: pts[i - 1]); seg.addLine(to: pts[i])
-            let wdt = 4.6 - 2.4 * Double(i) / Double(pts.count)
-            ctx.stroke(seg, with: .color(green), style: StrokeStyle(lineWidth: wdt, lineCap: .round))
-        }
-
-        // Hojas a lo largo del tallo.
-        var k = 0
-        for i in stride(from: 6, to: pts.count, by: 7) {
-            let p = pts[i], q = pts[i - 1]
-            let angle = atan2(p.y - q.y, p.x - q.x)
-            let side: Double = k % 2 == 0 ? 1 : -1
-            let grown = min(1, (Double(pts.count - i) / 14)) * min(1, g * 1.4)
-            var c = ctx
-            c.translateBy(x: p.x, y: p.y)
-            c.rotate(by: .radians(angle + side * (1.05 + 0.08 * sin(t * 1.4 + Double(k)))))
-            let len = (15 + 6 * frac(Double(k) * 0.7)) * min(1, grown + 0.25)
-            c.fill(LeafShape().path(in: CGRect(x: -len * 0.3, y: -len, width: len * 0.6, height: len)),
-                   with: .color(green.opacity(0.95)))
-            k += 1
-        }
-
-        // El zarcillo: la punta se enrosca en espiral (más cerrada cuanto más cerca del Mac).
-        if let tip = pts.last, g > 0.15 {
-            let tight = 0.55 + 0.45 * g
-            var curl = Path()
-            let base = t * 1.4
-            for j in 0...44 {
-                let f = Double(j) / 44
-                let r = (16 * (1 - f) + 2.5) * (1.2 - 0.35 * tight)
-                let a = base * 0.15 + f * 7.2 * tight
-                let pt = CGPoint(x: tip.x + cos(a) * r - r * 0.9, y: tip.y + sin(a) * r)
-                if j == 0 { curl.move(to: pt) } else { curl.addLine(to: pt) }
-            }
-            ctx.stroke(curl, with: .color(green), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-            if lit {
-                ctx.fill(Path(ellipseIn: CGRect(x: tip.x - 5, y: tip.y - 5, width: 10, height: 10)), with: .color(ember))
-                ctx.stroke(Path(ellipseIn: CGRect(x: tip.x - 11 - 3 * sin(t * 3), y: tip.y - 11 - 3 * sin(t * 3),
-                                                  width: 22 + 6 * sin(t * 3), height: 22 + 6 * sin(t * 3))),
-                           with: .color(ember.opacity(0.5)), lineWidth: 1.5)
-            }
-        }
+        mac(&ctx, w, h, t)
+        phone(&ctx, w, h, t)
+        vine(&ctx, w, h, t, g)
     }
 
     private func frac(_ x: Double) -> Double { x - floor(x) }
 
-    /// Un portátil de perfil: tapa, pantalla y base.
-    private func mac(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: TimeInterval, _ lit: Bool) {
-        let w = size.width, h = size.height
-        let screen = CGRect(x: w * 0.50, y: h * 0.07, width: w * 0.44, height: h * 0.27)
-        let shell = RoundedRectangle(cornerRadius: 12, style: .continuous).path(in: screen)
-        ctx.fill(shell, with: .color(Tone.recess))
-        ctx.stroke(shell, with: .color(lit ? Tone.ember.opacity(0.9) : Tone.ink.opacity(0.35)), lineWidth: lit ? 2.5 : 1.8)
-        let inner = screen.insetBy(dx: 8, dy: 8)
-        let glass = RoundedRectangle(cornerRadius: 6, style: .continuous).path(in: inner)
-        ctx.fill(glass, with: .linearGradient(
-            Gradient(colors: [lit ? Tone.ember.opacity(0.32) : Tone.key, Tone.recess]),
-            startPoint: CGPoint(x: inner.midX, y: inner.minY), endPoint: CGPoint(x: inner.midX, y: inner.maxY)))
-        // Contenido de la pantalla según el momento.
+    // MARK: Mac (de frente)
+
+    private func mac(_ ctx: inout GraphicsContext, _ w: Double, _ h: Double, _ t: TimeInterval) {
+        let screen = screenRect(w, h)
+        let lid = RoundedRectangle(cornerRadius: w * 0.035, style: .continuous).path(in: screen)
+        ctx.fill(lid, with: .color(Color(red: 0.09, green: 0.075, blue: 0.07)))
+        ctx.stroke(lid, with: .color(lit ? Tone.ember.opacity(0.85) : Tone.ink.opacity(0.28)), lineWidth: 1.5)
+
+        let glass = screen.insetBy(dx: w * 0.025, dy: w * 0.025)
+        let glassPath = RoundedRectangle(cornerRadius: w * 0.012, style: .continuous).path(in: glass)
+        ctx.fill(glassPath, with: .linearGradient(
+            Gradient(colors: lit ? [Tone.ember.opacity(0.55), Tone.emberDeep.opacity(0.35)] : [Tone.key, Tone.recess]),
+            startPoint: CGPoint(x: glass.minX, y: glass.minY), endPoint: CGPoint(x: glass.maxX, y: glass.maxY)))
+        // Cámara.
+        ctx.fill(Path(ellipseIn: CGRect(x: screen.midX - 2, y: screen.minY + w * 0.011, width: 4, height: 4)), with: .color(Tone.ink.opacity(0.25)))
+
+        var inner = ctx
+        inner.clip(to: glassPath)
         switch stage {
         case .searching:
-            let y = inner.minY + (inner.height - 2) * (0.5 + 0.5 * sin(t * 1.6))
-            ctx.fill(Path(CGRect(x: inner.minX + 6, y: y, width: inner.width - 12, height: 2)), with: .color(Tone.ember.opacity(0.35)))
-        case .choosing, .code:
+            // Ondas que salen del centro: el Mac se está anunciando.
+            for k in 0..<3 {
+                let p = frac(t * 0.45 + Double(k) / 3)
+                let r = glass.width * 0.08 + p * glass.width * 0.5
+                inner.stroke(Path(ellipseIn: CGRect(x: glass.midX - r, y: glass.midY - r, width: r * 2, height: r * 2)),
+                             with: .color(Tone.ember.opacity(0.45 * (1 - p))), lineWidth: 1.5)
+            }
+            leafIcon(&inner, CGPoint(x: glass.midX, y: glass.midY), glass.height * 0.22, Tone.ink.opacity(0.5), tilt: 0)
+        case .choosing:
+            leafIcon(&inner, CGPoint(x: glass.midX, y: glass.midY), glass.height * 0.28, Tone.ink.opacity(0.6), tilt: 0)
+        case .code:
+            // Seis puntos, como el código que muestra el Mac.
+            let d = glass.width * 0.055
             for i in 0..<6 {
-                let x = inner.midX + (Double(i) - 2.5) * 13
-                ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: inner.midY - 3, width: 6, height: 6)),
-                         with: .color(Tone.ink.opacity(stage == .code ? 0.35 + 0.35 * sin(t * 2 + Double(i)) : 0.2)))
+                let x = glass.midX + (Double(i) - 2.5) * d * 2.1 + (i >= 3 ? d * 0.6 : -d * 0.6)
+                let o = 0.35 + 0.45 * (0.5 + 0.5 * sin(t * 2.4 - Double(i) * 0.6))
+                inner.fill(RoundedRectangle(cornerRadius: d * 0.35).path(in: CGRect(x: x - d * 0.8, y: glass.midY - d, width: d * 1.6, height: d * 2)),
+                           with: .color(Tone.ink.opacity(o)))
             }
         case .connecting:
-            var c = ctx
-            c.translateBy(x: inner.midX, y: inner.midY)
-            c.rotate(by: .degrees(35))
-            let s = min(inner.width, inner.height) * 0.62
-            c.fill(LeafShape().path(in: CGRect(x: -s * 0.3, y: -s / 2, width: s * 0.6, height: s)), with: .color(Tone.ember))
+            leafIcon(&inner, CGPoint(x: glass.midX, y: glass.midY), glass.height * 0.36 * (1 + 0.04 * sin(t * 3)), Tone.onEmber, tilt: 0)
         }
-        // Base.
+
+        // Base: una lámina con la muesca para abrir la tapa.
+        let bw = w * 0.92, by = screen.maxY + h * 0.002
         var base = Path()
-        base.move(to: CGPoint(x: w * 0.44, y: h * 0.355)); base.addLine(to: CGPoint(x: w * 0.995, y: h * 0.355))
-        base.addLine(to: CGPoint(x: w * 0.96, y: h * 0.385)); base.addLine(to: CGPoint(x: w * 0.475, y: h * 0.385)); base.closeSubpath()
-        ctx.fill(base, with: .color(Tone.key))
-        ctx.stroke(base, with: .color(Tone.ink.opacity(0.3)), lineWidth: 1.2)
+        base.move(to: CGPoint(x: w / 2 - bw / 2 + w * 0.02, y: by))
+        base.addLine(to: CGPoint(x: w / 2 + bw / 2 - w * 0.02, y: by))
+        base.addQuadCurve(to: CGPoint(x: w / 2 + bw / 2, y: by + h * 0.028), control: CGPoint(x: w / 2 + bw / 2, y: by))
+        base.addLine(to: CGPoint(x: w / 2 - bw / 2, y: by + h * 0.028))
+        base.addQuadCurve(to: CGPoint(x: w / 2 - bw / 2 + w * 0.02, y: by), control: CGPoint(x: w / 2 - bw / 2, y: by))
+        base.closeSubpath()
+        ctx.fill(base, with: .linearGradient(Gradient(colors: [Color(red: 0.42, green: 0.37, blue: 0.35), Color(red: 0.22, green: 0.19, blue: 0.18)]),
+                                             startPoint: CGPoint(x: 0, y: by), endPoint: CGPoint(x: 0, y: by + h * 0.028)))
+        ctx.fill(RoundedRectangle(cornerRadius: 3).path(in: CGRect(x: w / 2 - w * 0.08, y: by, width: w * 0.16, height: h * 0.008)),
+                 with: .color(.black.opacity(0.35)))
+        ctx.stroke(base, with: .color(Tone.ink.opacity(0.25)), lineWidth: 1)
     }
 
-    /// El iPhone, de donde nace la enredadera.
-    private func phone(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: TimeInterval) {
-        let w = size.width, h = size.height
-        let body = CGRect(x: w * 0.13, y: h * 0.66, width: w * 0.28, height: h * 0.36)
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous).path(in: body)
-        ctx.fill(shape, with: .color(Tone.recess))
-        ctx.stroke(shape, with: .color(Tone.ink.opacity(0.45)), lineWidth: 1.8)
-        let notch = Path(roundedRect: CGRect(x: body.midX - 12, y: body.minY + 6, width: 24, height: 5), cornerRadius: 2.5)
-        ctx.fill(notch, with: .color(Tone.ink.opacity(0.3)))
-        // Maceta: la hoja sale del teléfono.
-        var c = ctx
-        c.translateBy(x: body.midX, y: body.minY + body.height * 0.5)
-        c.rotate(by: .degrees(-15 + 6 * sin(t * 1.1)))
-        let s = body.width * 0.55
-        c.fill(LeafShape().path(in: CGRect(x: -s * 0.3, y: -s / 2, width: s * 0.6, height: s)), with: .color(Tone.ember.opacity(0.9)))
+    // MARK: iPhone (de frente)
+
+    private func phone(_ ctx: inout GraphicsContext, _ w: Double, _ h: Double, _ t: TimeInterval) {
+        let body = phoneRect(w, h)
+        let shape = RoundedRectangle(cornerRadius: body.width * 0.2, style: .continuous).path(in: body)
+        ctx.fill(shape, with: .color(Color(red: 0.09, green: 0.075, blue: 0.07)))
+        ctx.stroke(shape, with: .color(Tone.ink.opacity(0.35)), lineWidth: 1.5)
+        let glass = body.insetBy(dx: body.width * 0.07, dy: body.width * 0.07)
+        let gp = RoundedRectangle(cornerRadius: body.width * 0.14, style: .continuous).path(in: glass)
+        ctx.fill(gp, with: .linearGradient(Gradient(colors: [Tone.ember.opacity(0.35), Tone.recess]),
+                                           startPoint: CGPoint(x: glass.midX, y: glass.minY), endPoint: CGPoint(x: glass.midX, y: glass.maxY)))
+        // Isla dinámica.
+        ctx.fill(Capsule().path(in: CGRect(x: glass.midX - glass.width * 0.2, y: glass.minY + glass.width * 0.08,
+                                           width: glass.width * 0.4, height: glass.width * 0.12)), with: .color(.black))
+        leafIcon(&ctx, CGPoint(x: glass.midX, y: glass.midY + glass.height * 0.06), glass.width * 0.42, Tone.ember, tilt: 8 * sin(t * 1.1))
+    }
+
+    /// El icono de la hoja (el mismo de la app), centrado en `c`, de alto `s`.
+    private func leafIcon(_ ctx: inout GraphicsContext, _ c: CGPoint, _ s: Double, _ color: Color, tilt: Double) {
+        var l = ctx
+        l.translateBy(x: c.x, y: c.y)
+        l.rotate(by: .degrees(tilt))
+        var img = l.resolve(Image(systemName: "leaf.fill").resizable())
+        img.shading = .color(color)
+        l.draw(img, in: CGRect(x: -s / 2, y: -s / 2, width: s, height: s))
+    }
+
+    // MARK: Enredadera
+
+    private func vine(_ ctx: inout GraphicsContext, _ w: Double, _ h: Double, _ t: TimeInterval, _ g: Double) {
+        let n = max(2, Int(80 * g))
+        var pts: [CGPoint] = []
+        for i in 0...n {
+            let u = g * Double(i) / Double(n)
+            var p = stem(u, w, h)
+            p.x += sin(t * 1.2 + u * 6) * w * 0.012 * u * (lit ? 0.3 : 1)
+            pts.append(p)
+        }
+        let green = Color(red: 0.55, green: 0.82, blue: 0.52)
+        let deep = Color(red: 0.36, green: 0.62, blue: 0.36)
+
+        // Tallo con grosor que se afina hacia la punta.
+        for i in 1..<pts.count {
+            var seg = Path(); seg.move(to: pts[i - 1]); seg.addLine(to: pts[i])
+            let f = Double(i) / Double(pts.count)
+            ctx.stroke(seg, with: .color(deep), style: StrokeStyle(lineWidth: w * (0.018 - 0.010 * f), lineCap: .round))
+        }
+
+        // Hojas alternas, cada una del mismo tamaño salvo las que están brotando cerca de la punta.
+        var k = 0
+        for i in stride(from: 8, to: pts.count - 3, by: 9) {
+            let p = pts[i], q = pts[i - 2]
+            let angle = atan2(p.y - q.y, p.x - q.x) + .pi / 2
+            let side: Double = k % 2 == 0 ? 1 : -1
+            let fresh = min(1, Double(pts.count - i) / 12)
+            var c = ctx
+            c.translateBy(x: p.x, y: p.y)
+            c.rotate(by: .radians(angle + side * (0.95 + 0.07 * sin(t * 1.4 + Double(k)))))
+            let len = w * 0.075 * fresh
+            c.fill(LeafShape().path(in: CGRect(x: -len * 0.32, y: -len, width: len * 0.64, height: len)), with: .color(green))
+            var vein = Path(); vein.move(to: .zero); vein.addLine(to: CGPoint(x: 0, y: -len * 0.8))
+            c.stroke(vein, with: .color(deep.opacity(0.8)), lineWidth: 1)
+            k += 1
+        }
+
+        // La punta: un zarcillo en espiral. Al conectar se enrosca en el borde del Mac.
+        guard let tip = pts.last, g > 0.1 else { return }
+        let dir = atan2(tip.y - pts[max(0, pts.count - 4)].y, tip.x - pts[max(0, pts.count - 4)].x)
+        var curl = Path()
+        curl.move(to: tip)
+        let turns = lit ? 1.6 : 1.1 + 0.2 * sin(t * 1.5)
+        for j in 1...40 {
+            let f = Double(j) / 40
+            let r = w * 0.045 * (1 - f * 0.85)
+            let a = dir + f * turns * 2 * .pi
+            let center = CGPoint(x: tip.x + cos(dir) * w * 0.02, y: tip.y + sin(dir) * w * 0.02)
+            curl.addLine(to: CGPoint(x: center.x + cos(a - .pi) * r * (1 - f) + cos(dir) * r * f,
+                                     y: center.y + sin(a - .pi) * r * (1 - f) + sin(dir) * r * f))
+        }
+        ctx.stroke(curl, with: .color(deep), style: StrokeStyle(lineWidth: w * 0.007, lineCap: .round, lineJoin: .round))
+
+        if lit {
+            // El punto donde se agarra: late.
+            let r = w * 0.02 * (1 + 0.25 * sin(t * 3))
+            ctx.fill(Path(ellipseIn: CGRect(x: tip.x - r, y: tip.y - r, width: r * 2, height: r * 2)), with: .color(Tone.ember))
+            let ring = r * 2.2
+            ctx.stroke(Path(ellipseIn: CGRect(x: tip.x - ring, y: tip.y - ring, width: ring * 2, height: ring * 2)),
+                       with: .color(Tone.ember.opacity(0.4)), lineWidth: 1.2)
+        } else {
+            // Yema en la punta mientras crece.
+            ctx.fill(Path(ellipseIn: CGRect(x: tip.x - w * 0.011, y: tip.y - w * 0.011, width: w * 0.022, height: w * 0.022)), with: .color(green))
+        }
     }
 }
 
@@ -232,26 +281,22 @@ struct ConnectView: View {
                 }
                 .padding(.horizontal, Space.l)
             } else {
-                VStack(spacing: Space.s) {
-                    // La escena cede sitio cuando sale el teclado, en vez de empujar el código fuera de pantalla.
+                VStack(spacing: 0) {
+                    Spacer(minLength: Space.s)
+                    // Con el teclado la escena se encoge; sin él ocupa lo que haya, siempre en proporción.
                     VineScene(stage: stage)
-                        .frame(minHeight: 110, maxHeight: focused ? 190 : 340)
-                        .frame(maxWidth: 420)
-                        .animation(.spring(duration: 0.4), value: focused)
-                    title
-                    ScrollView {
-                        VStack(spacing: Space.m) { content }
-                            .frame(maxWidth: 400)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, Space.xs).padding(.bottom, Space.s)
-                    }
-                    .scrollIndicators(.hidden)
-                    .scrollBounceBehavior(.basedOnSize)
-                    .layoutPriority(1)
+                        .frame(maxWidth: 300, maxHeight: focused ? 170 : 360)
+                        .animation(.spring(duration: 0.45), value: focused)
+                    title.padding(.top, Space.m)
+                    VStack(spacing: Space.m) { content }
+                        .frame(maxWidth: 400)
+                        .padding(.top, Space.l)
+                        .animation(.spring(duration: 0.45), value: remote.phase)
+                    Spacer(minLength: Space.s)
                     footer
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, Space.l)
-                .padding(.top, Space.s)
             }
         }
         .onChange(of: remote.phase) { _, p in
@@ -322,21 +367,21 @@ struct ConnectView: View {
                     .multilineTextAlignment(.center)
             }
         case .connecting(let mac), .connected(let mac):
-            status("Conectando con \(mac)", detail: "Un momento…", spinning: true)
+            status("Conectando", detail: mac, spinning: true)
         }
     }
 
     private func status(_ title: String, detail: String?, spinning: Bool) -> some View {
         VStack(spacing: 6) {
-            HStack(spacing: 8) {
-                if spinning { ProgressView().tint(Tone.ember).scaleEffect(0.8) }
-                Text(title).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
-            }
+            Text(title).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                .multilineTextAlignment(.center)
             if let detail {
-                Text(detail).font(.system(size: 14)).foregroundStyle(Tone.ink.opacity(0.65)).multilineTextAlignment(.center)
+                Text(detail).font(.system(size: 14)).foregroundStyle(Tone.ink.opacity(0.62)).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if spinning { WaitingDots().padding(.top, 4) }
         }
+        .frame(maxWidth: .infinity)
     }
 
     /// Los tres pasos para que aparezca el Mac.
@@ -424,5 +469,24 @@ struct ConnectView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
+    }
+}
+
+
+/// Tres puntos que laten en fila: esperando.
+struct WaitingDots: View {
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 7) {
+                ForEach(0..<3, id: \.self) { i in
+                    let v = 0.5 + 0.5 * sin(t * 4 - Double(i) * 0.9)
+                    Circle().fill(Tone.ember).frame(width: 7, height: 7)
+                        .scaleEffect(0.7 + 0.3 * v).opacity(0.35 + 0.65 * v)
+                }
+            }
+        }
+        .frame(height: 10)
+        .accessibilityHidden(true)
     }
 }
