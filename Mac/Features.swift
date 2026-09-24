@@ -186,7 +186,8 @@ final class Laser: ObservableObject {
 
 private struct LaserView: View {
     @ObservedObject var laser: Laser
-    private let hot = Color(red: 1, green: 0.35, blue: 0.15)
+    /// El láser brilla con el color del tema.
+    private var hot: Color { MacTone.ember }
 
     var body: some View {
         Canvas { ctx, _ in
