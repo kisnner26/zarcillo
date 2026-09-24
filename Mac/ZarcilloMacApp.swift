@@ -55,6 +55,7 @@ struct MenuView: View {
                 title: "Pantalla en vivo apagada",
                 detail: "Para ver el Mac en el iPhone hace falta el permiso de Grabación de pantalla.",
                 symbol: "rectangle.dashed", action: ScreenGrabber.requestAccess) }
+            optionalPermissions
             if let problem = server.problem {
                 Text(problem).font(.caption).foregroundStyle(.red)
             }
@@ -120,6 +121,29 @@ struct MenuView: View {
         }
         .padding(14)
         .background(Ceramic(shape: RoundedRectangle(cornerRadius: 20, style: .continuous), fill: MacTone.recess))
+    }
+
+    /// Cámara, Bluetooth y automatización: solo hacen falta para funciones concretas.
+    @ViewBuilder private var optionalPermissions: some View {
+        let missing = server.permissions.filter { $0.kind.isOptional && $0.needsAttention }
+        if !missing.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("PERMISOS OPCIONALES").font(.system(size: 10, weight: .bold)).tracking(1.4)
+                    .foregroundStyle(MacTone.ink.opacity(0.45))
+                ForEach(missing) { entry in
+                    HStack(spacing: 10) {
+                        Image(systemName: entry.kind.symbol).font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(MacTone.ember).frame(width: 22)
+                        Text(entry.kind.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(MacTone.ink)
+                        Spacer(minLength: 0)
+                        Button(entry.state == .denied ? "Abrir Ajustes" : "Permitir") { Permissions.request(entry.kind) }
+                            .buttonStyle(Pill(fill: MacTone.key, fg: MacTone.ink.opacity(0.85)))
+                    }
+                }
+            }
+            .padding(12)
+            .background(Ceramic(shape: RoundedRectangle(cornerRadius: 16, style: .continuous), fill: MacTone.key))
+        }
     }
 
     private func permission(title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {

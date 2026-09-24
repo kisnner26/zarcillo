@@ -315,6 +315,8 @@ enum Command: Codable {
     /// El reloj "agarra" lo que tienes delante en el Mac: la selección del
     /// Finder, la pestaña del navegador, el portapapeles o, si no, la pantalla.
     case grab
+    /// Pide un permiso de macOS en el Mac (aviso del sistema o panel de Ajustes).
+    case requestPermission(PermissionKind)
 }
 
 /// Mac → iPhone.
@@ -351,6 +353,8 @@ enum Event: Codable {
     case tab(url: String, title: String)
     /// Lo agarrado: kind es image, file, url o text.
     case grabbed(kind: String, name: String, data: Data?, text: String?)
+    /// Estado de cada permiso de macOS que usa Zarcillo.
+    case macPermissions([PermissionEntry])
 }
 
 /// Qué parte de la pantalla sigue cada foco.

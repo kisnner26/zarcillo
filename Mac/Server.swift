@@ -29,6 +29,8 @@ final class Server: ObservableObject {
     let near = ProximityLock()
     let guest = GuestSprout()
     let mixer = Mixer()
+    /// Estado de los permisos de macOS; el menú y el iPhone lo muestran.
+    @Published private(set) var permissions: [PermissionEntry] = Permissions.all()
     /// La ventana desprendida, si la hay: el stream manda solo esa.
     private var detachTarget: String?
     let macName = Host.current().localizedName ?? "Mac"
@@ -260,6 +262,7 @@ final class Server: ObservableObject {
             reply(key, .capabilities(touchBar: TouchBarController.hasTouchBar))
             reply(key, .touchBarConfig(TouchBarController.config))
             reply(key, .lights(devices: lights.devices, ambient: lights.ambient, brightness: lights.brightness))
+            reply(key, .macPermissions(permissions))
             reply(key, .guardianState(on: guardian.armed, siren: guardian.siren))
             reply(key, .nearState(on: near.on, rssi: near.rssi, threshold: near.threshold, locked: near.locked))
             reply(key, .guestPass(url: guest.url, expires: guest.expires?.timeIntervalSince1970))
@@ -543,6 +546,11 @@ final class Server: ObservableObject {
                 }
             }
 
+        case .requestPermission(let kind):
+            Permissions.request(kind)
+            hud.showMessage("mira el aviso en el Mac", symbol: kind.symbol)
+            reply(key, .status("pidiendo \(kind.title) en el Mac"))
+
         case .grab:
             musicQueue.async { [weak self] in
                 let front = MacGrab.fromFrontApp()
@@ -573,6 +581,14 @@ final class Server: ObservableObject {
         guard let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
               id != Bundle.main.bundleIdentifier else { return }
         broadcast(.frontApp(id: id, name: app.localizedName ?? ""))
+    }
+
+    /// Si algún permiso cambió (en Ajustes, o al aceptar el aviso), el menú y el iPhone se enteran.
+    private func refreshPermissions() {
+        let now = Permissions.all()
+        guard now != permissions else { return }
+        permissions = now
+        broadcast(.macPermissions(now))
     }
 
     private func broadcastNear() {
@@ -724,6 +740,7 @@ final class Server: ObservableObject {
             broadcast(.cameraInUse(busy))
         }
         canControl = Input.isTrusted
+        refreshPermissions()
         mixer.refresh()
         canCapture = ScreenGrabber.allowed
         if canCapture != wasCapture {

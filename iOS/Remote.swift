@@ -90,6 +90,20 @@ final class Remote: ObservableObject {
     @Published var transcribing = false
     @Published private(set) var knobMarks = 0
     func markFromKnob() { knobMarks += 1 }
+
+    /// Pide el permiso en el Mac: sale el aviso del sistema o se abre Ajustes allí.
+    func requestPermission(_ kind: PermissionKind) {
+        send(.requestPermission(kind))
+        flash("mira el aviso en el Mac")
+    }
+
+    /// Los permisos que faltan (la automatización solo cuenta si se negó).
+    var missingPermissions: [PermissionKind] {
+        PermissionKind.allCases.filter { kind in
+            guard let s = permissions[kind] else { return false }
+            return PermissionEntry(kind: kind, state: s).needsAttention
+        }
+    }
     /// Sentir la música: cada golpe vibra en la mano.
     @Published var feelingBeats = false
     @Published private(set) var beatCount = 0
@@ -115,6 +129,8 @@ final class Remote: ObservableObject {
     @Published private(set) var guestURL: String?
     @Published private(set) var guestExpires: Date?
     @Published private(set) var detachedTitle: String?
+    /// Permisos de macOS que el Mac tiene dados (o no).
+    @Published private(set) var permissions: [PermissionKind: PermissionState] = [:]
     /// Lo que el Mac entregó cuando el reloj pidió agarrar algo.
     var onGrabbed: ((String, String, Data?, String?) -> Void)?
     /// Órdenes que llegaron sin conexión (por ejemplo, del reloj con la app dormida): salen al conectar.
@@ -431,6 +447,8 @@ final class Remote: ObservableObject {
         case .guestPass(let url, let expires):
             guestURL = url
             guestExpires = expires.map { Date(timeIntervalSince1970: $0) }
+        case .macPermissions(let list):
+            permissions = Dictionary(uniqueKeysWithValues: list.map { ($0.kind, $0.state) })
         case .grabbed(let kind, let name, let data, let text):
             onGrabbed?(kind, name, data, text)
         case .detached(let title):

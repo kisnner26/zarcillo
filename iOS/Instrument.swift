@@ -50,12 +50,13 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
+    case classes, photos, send, scan, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .classes: "clases"
+        case .permissions: "permisos"
         case .detach: "desprender"
         case .mixer: "mezclador"
         case .gaze: "mirada"
@@ -83,6 +84,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .classes: "transcribe y traduce en vivo"
+        case .permissions: "lo que el Mac te deja usar"
         case .detach: "una ventana del Mac en tu mano"
         case .mixer: "volumen por app"
         case .gaze: "el cursor sigue tus ojos"
@@ -110,6 +112,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .classes: "waveform"
+        case .permissions: "checkmark.shield"
         case .detach: "macwindow.badge.plus"
         case .mixer: "slider.vertical.3"
         case .gaze: "eye"
@@ -177,7 +180,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         case .send: [.photos, .send, .scan, .classes]
         case .ambience: [.lights, .callLight, .posture]
         case .security: [.guardian, .near, .guest]
-        case .custom: [.routines, .shortcuts, .touchBar, .color]
+        case .custom: [.routines, .shortcuts, .touchBar, .color, .permissions]
         }
     }
 }
@@ -1167,13 +1170,22 @@ struct MoreStage: View {
             )
             // Un brote que late: esta función está encendida.
             .overlay(alignment: .topTrailing) {
-                if on { PulseDot().padding(9) }
+                if on {
+                    PulseDot().padding(9)
+                } else if remote.blocked(item) {
+                    // Le falta un permiso en el Mac.
+                    Text("!").font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Color.black.opacity(0.75))
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(Color(red: 1, green: 0.78, blue: 0.32)))
+                        .padding(7)
+                }
             }
             .scaleEffect(selected ? 1.04 : 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScale())
-        .accessibilityLabel(item.title + (on ? ", activa" : ""))
+        .accessibilityLabel(item.title + (on ? ", activa" : "") + (remote.blocked(item) ? ", falta un permiso en el Mac" : ""))
         .animation(.spring(duration: 0.3), value: selected)
         .animation(.spring(duration: 0.3), value: on)
     }
@@ -1239,6 +1251,7 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .classes: ClassesPage()
+        case .permissions: PermissionsPage()
         case .detach: DetachPage()
         case .mixer: MixerPage()
         case .gaze: GazePage()
@@ -1399,6 +1412,29 @@ extension Remote {
         case .mixer: mixerApps.contains { $0.gain < 0.99 }
         case .callLight: cameraInUse && UserDefaults.standard.object(forKey: "light.auto") as? Bool ?? true
         default: false
+        }
+    }
+}
+
+extension MoreItem {
+    /// Permisos del Mac sin los cuales esta función no anda.
+    var needs: [PermissionKind] {
+        switch self {
+        case .detach, .lights: [.screen]
+        case .compass, .laser, .gestures, .gaze: [.accessibility]
+        case .posture, .guardian: [.camera]
+        case .near: [.bluetooth]
+        default: []
+        }
+    }
+}
+
+extension Remote {
+    /// ¿A esta función le falta un permiso en el Mac?
+    func blocked(_ item: MoreItem) -> Bool {
+        item.needs.contains { kind in
+            guard let s = permissions[kind] else { return false }
+            return PermissionEntry(kind: kind, state: s).needsAttention
         }
     }
 }
