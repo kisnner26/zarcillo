@@ -12,12 +12,23 @@ enum Tone {
 
 /// La superficie del control: naranja cálido que brilla, como una lámpara.
 struct Glow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Tone.peach, Tone.orange, Tone.ember],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            RadialGradient(colors: [.white.opacity(0.38), .clear],
-                           center: UnitPoint(x: 0.28, y: 0.18), startRadius: 0, endRadius: 460)
+        // Dos focos de luz que derivan despacio: la superficie parece viva sin
+        // distraer. 20 cuadros por segundo alcanzan para un movimiento tan lento.
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
+            let t = reduce ? 0 : tl.date.timeIntervalSinceReferenceDate
+            ZStack {
+                LinearGradient(colors: [Tone.peach, Tone.orange, Tone.ember],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [.white.opacity(0.4), .clear],
+                               center: UnitPoint(x: 0.28 + 0.10 * sin(t * 0.21), y: 0.18 + 0.07 * cos(t * 0.17)),
+                               startRadius: 0, endRadius: 470)
+                RadialGradient(colors: [Tone.ember.opacity(0.5), .clear],
+                               center: UnitPoint(x: 0.82 + 0.10 * cos(t * 0.13), y: 0.88 + 0.08 * sin(t * 0.19)),
+                               startRadius: 0, endRadius: 400)
+            }
         }
         .ignoresSafeArea()
     }
@@ -87,7 +98,7 @@ struct RootView: View {
                 let layout = landscape ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
                 layout {
                     if landscape { PageBar(page: $page, vertical: true) }
-                    Group {
+                    ZStack {
                         switch page {
                         case 0: AppsPage()
                         case 1: DialPage()
@@ -95,14 +106,19 @@ struct RootView: View {
                         default: PadPage()
                         }
                     }
+                    .id(page)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.96)).combined(with: .offset(y: 14)),
+                        removal: .opacity.combined(with: .scale(scale: 1.02))))
                     if !landscape { PageBar(page: $page, vertical: false) }
                 }
             } else {
                 ConnectView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
             }
         }
+        .animation(.spring(duration: 0.5, bounce: 0.25), value: remote.phase)
         .overlay(alignment: .top) { StatusPill() }
     }
 }
@@ -117,6 +133,10 @@ struct StatusPill: View {
             HStack(spacing: 6) {
                 if remote.pill == nil {
                     Circle().fill(remote.canControl ? Color.green : Color.orange).frame(width: 6, height: 6)
+                        .phaseAnimator([1.0, 0.35]) { v, o in v.opacity(o) } animation: { _ in .easeInOut(duration: 1.2) }
+                } else {
+                    Image(systemName: "sparkle").font(.system(size: 10, weight: .bold)).foregroundStyle(Tone.peach)
+                        .transition(.scale.combined(with: .opacity))
                 }
                 Text(remote.pill ?? remote.macName)
                     .font(.system(size: 12, weight: .semibold))
@@ -125,9 +145,10 @@ struct StatusPill: View {
                     .contentTransition(.opacity)
             }
             .padding(.horizontal, 14).padding(.vertical, 7)
-            .background(Capsule().fill(.black))
+            .background(Capsule().fill(.black).shadow(color: .black.opacity(0.25), radius: 8, y: 3))
             .padding(.top, 6)
-            .transition(.scale.combined(with: .opacity))
+            .transition(.scale(scale: 0.6, anchor: .top).combined(with: .opacity))
+            .animation(.spring(duration: 0.45, bounce: 0.35), value: remote.pill)
         }
     }
 }
@@ -135,6 +156,7 @@ struct StatusPill: View {
 struct PageBar: View {
     @Binding var page: Int
     var vertical: Bool
+    @Namespace private var selection
     private let items = [("square.grid.2x2.fill", "apps"), ("dial.medium.fill", "dial"),
                          ("hand.draw.fill", "gestos"), ("hand.point.up.left.fill", "pad")]
 
@@ -144,16 +166,22 @@ struct PageBar: View {
             ForEach(items.indices, id: \.self) { i in
                 Button {
                     Haptic.tap()
-                    withAnimation(.easeInOut(duration: 0.2)) { page = i }
+                    withAnimation(.spring(duration: 0.42, bounce: 0.3)) { page = i }
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: items[i].0).font(.system(size: 17, weight: .semibold))
+                            .symbolEffect(.bounce, value: page == i)
                         Text(items[i].1).font(.system(size: 10, weight: .semibold))
                     }
                     .foregroundStyle(page == i ? .white : .white.opacity(0.5))
                     .frame(maxWidth: vertical ? 56 : .infinity, maxHeight: vertical ? .infinity : nil)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(page == i ? Color.white.opacity(0.16) : .clear))
+                    .background {
+                        if page == i {
+                            Capsule().fill(Color.white.opacity(0.16))
+                                .matchedGeometryEffect(id: "selection", in: selection)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -171,6 +199,7 @@ struct ConnectView: View {
     @EnvironmentObject private var remote: Remote
     @Environment(\.isLandscape) private var landscape
     @State private var code = ""
+    @State private var shakes = 0
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -196,11 +225,29 @@ struct ConnectView: View {
             if case .needsCode = p { code = ""; focused = true }
         }
         .onAppear { if case .needsCode = remote.phase { focused = true } }
+        .onChange(of: remote.codeError) { _, e in
+            if e != nil {
+                shakes += 1
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+        }
+    }
+
+    private var searching: Bool {
+        switch remote.phase {
+        case .searching, .connecting: true
+        default: false
+        }
     }
 
     private var brand: some View {
         VStack(spacing: 10) {
-            Image(systemName: "leaf.fill").font(.system(size: 40)).foregroundStyle(Tone.ink.opacity(0.8))
+            ZStack {
+                if searching { RadarRings().frame(width: 70, height: 70) }
+                Image(systemName: "leaf.fill").font(.system(size: 40)).foregroundStyle(Tone.ink.opacity(0.8))
+                    .floating()
+            }
+            .frame(height: 70)
             Text("Zarcillo").font(.system(size: 34, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
         }
     }
@@ -208,20 +255,22 @@ struct ConnectView: View {
     @ViewBuilder private var content: some View {
             switch remote.phase {
             case .searching:
-                ProgressView().tint(Tone.ink)
                 hint(remote.networkDenied
                      ? "Zarcillo no tiene permiso de red local. Actívalo en Ajustes › Zarcillo."
                      : "Buscando tu Mac… abre Zarcillo en el Mac y usa la misma Wi-Fi.")
             case .choosing:
                 hint("¿Qué Mac quieres controlar?")
                 VStack(spacing: 8) {
-                    ForEach(remote.macs, id: \.self) { mac in
+                    ForEach(Array(remote.macs.enumerated()), id: \.element) { i, mac in
                         Button { remote.choose(mac) } label: {
                             Label(remote.name(mac), systemImage: "laptopcomputer")
                                 .font(.headline).foregroundStyle(.white)
                                 .frame(maxWidth: 280).padding(.vertical, 12)
                                 .background(Capsule().fill(.black.opacity(0.85)))
                         }
+                        .buttonStyle(PressScale())
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(duration: 0.5, bounce: 0.3).delay(Double(i) * 0.06), value: remote.macs.count)
                     }
                 }
             case .needsCode(let mac):
@@ -231,7 +280,6 @@ struct ConnectView: View {
                     Text(e).font(.footnote.weight(.semibold)).foregroundStyle(Color(red: 0.45, green: 0.05, blue: 0.02))
                 }
             case .connecting(let mac):
-                ProgressView().tint(Tone.ink)
                 hint("Conectando con \(mac)…")
             case .connected:
                 EmptyView()
@@ -257,14 +305,27 @@ struct ConnectView: View {
             HStack(spacing: 8) {
                 ForEach(0..<6, id: \.self) { i in
                     let chars = Array(code)
-                    Text(i < chars.count ? String(chars[i]) : "")
+                    let filled = i < chars.count
+                    let next = i == chars.count && focused
+                    Text(filled ? String(chars[i]) : "")
                         .font(.system(size: 28, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
+                        .contentTransition(.numericText())
                         .frame(width: 44, height: 56)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(i < chars.count ? 0.85 : 0.35)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(filled ? 0.85 : 0.35)))
+                        .overlay {
+                            // La casilla que espera el siguiente dígito late.
+                            if next {
+                                RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.8), lineWidth: 2)
+                                    .phaseAnimator([0.25, 1.0]) { v, o in v.opacity(o) } animation: { _ in .easeInOut(duration: 0.7) }
+                            }
+                        }
+                        .scaleEffect(filled ? 1 : 0.92)
+                        .animation(.spring(duration: 0.3, bounce: 0.5), value: filled)
                     if i == 2 { Spacer().frame(width: 6) }
                 }
             }
+            .shake(shakes)
             .allowsHitTesting(false)
         }
         .contentShape(Rectangle())
@@ -277,6 +338,7 @@ struct ConnectView: View {
 struct AppsPage: View {
     @EnvironmentObject private var remote: Remote
     @Environment(\.isLandscape) private var landscape
+    @State private var appeared = false
 
     var body: some View {
         ScrollView {
@@ -285,28 +347,63 @@ struct AppsPage: View {
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: landscape ? 70 : 74), spacing: 16)],
                       spacing: landscape ? 16 : 22) {
-                ForEach(remote.apps) { app in
-                    Button {
-                        Haptic.thump()
+                ForEach(Array(remote.apps.enumerated()), id: \.element.id) { i, app in
+                    AppIconButton(app: app, image: remote.icons[app.id], index: i,
+                                  side: landscape ? 62 : 70, appeared: appeared) {
                         remote.launch(app)
-                    } label: {
-                        VStack(spacing: 6) {
-                            if let image = remote.icons[app.id] {
-                                Image(uiImage: image).resizable().interpolation(.high)
-                                    .frame(width: landscape ? 62 : 70, height: landscape ? 62 : 70)
-                                    .shadow(color: Tone.ink.opacity(0.35), radius: 8, y: 5)
-                            }
-                            Circle().fill(Tone.ink.opacity(app.running ? 0.7 : 0)).frame(width: 5, height: 5)
-                        }
                     }
-                    .buttonStyle(PressScale())
-                    .accessibilityLabel(app.name)
                 }
             }
             .padding(.horizontal, 20).padding(.top, landscape ? 44 : 60).padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
         .refreshable { remote.send(.listApps) }
+        // La cascada arranca cuando hay iconos que mostrar, no al abrir la pantalla vacía.
+        .onAppear { if !remote.apps.isEmpty { appeared = true } }
+        .onChange(of: remote.apps.isEmpty) { _, empty in if !empty { appeared = true } }
+    }
+}
+
+/// Un icono de app: entra en cascada, rebota al tocarlo y suelta un anillo de luz.
+struct AppIconButton: View {
+    let app: AppTile
+    let image: UIImage?
+    let index: Int
+    let side: CGFloat
+    let appeared: Bool
+    let action: () -> Void
+    @State private var taps = 0
+
+    var body: some View {
+        Button {
+            Haptic.thump()
+            taps += 1
+            action()
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    Ripple(trigger: taps, cornerRadius: side * 0.24)
+                        .frame(width: side, height: side)
+                    if let image {
+                        Image(uiImage: image).resizable().interpolation(.high)
+                            .frame(width: side, height: side)
+                            .shadow(color: Tone.ink.opacity(0.35), radius: 8, y: 5)
+                            .boing(taps)
+                    }
+                }
+                Circle()
+                    .fill(app.running ? Color.white : .clear)
+                    .frame(width: 5, height: 5)
+                    .shadow(color: .white.opacity(app.running ? 0.9 : 0), radius: 4)
+                    .animation(.easeInOut(duration: 0.3), value: app.running)
+            }
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel(app.name)
+        .scaleEffect(appeared ? 1 : 0.3)
+        .opacity(appeared ? 1 : 0)
+        .rotationEffect(.degrees(appeared ? 0 : -12))
+        .animation(.spring(duration: 0.55, bounce: 0.4).delay(Double(index) * 0.035), value: appeared)
     }
 }
 
@@ -357,7 +454,7 @@ struct DialPage: View {
     private func chip(_ title: String, _ symbol: String, _ k: LevelKind) -> some View {
         Button {
             Haptic.tap()
-            kind = k
+            withAnimation(.spring(duration: 0.5, bounce: 0.25)) { kind = k }
         } label: {
             Label(title, systemImage: symbol)
                 .font(.system(size: 14, weight: .semibold))
@@ -380,20 +477,34 @@ struct Dial: View {
     private let start = 135.0, sweep = 270.0
     @State private var lastTick = -1
     @State private var dragging = false
+    @State private var bump = 0
     private let selection = UISelectionFeedbackGenerator()
 
     var body: some View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+            let head = Int((value * Double(ticks - 1)).rounded())
             ZStack {
+                // Arco de luz detrás de las marcas encendidas.
+                Circle()
+                    .trim(from: 0, to: value * sweep / 360)
+                    .stroke(Color.white.opacity(dragging ? 0.7 : 0.45),
+                            style: StrokeStyle(lineWidth: dragging ? 26 : 18, lineCap: .round))
+                    .blur(radius: dragging ? 14 : 10)
+                    .rotationEffect(.degrees(start))
+                    .frame(width: side - 32, height: side - 32)
+                    .animation(.spring(duration: 0.35), value: dragging)
                 ForEach(0..<ticks, id: \.self) { i in
                     let t = Double(i) / Double(ticks - 1)
                     let on = t <= value + 0.0001
+                    let isHead = i == head && value > 0
                     Capsule()
-                        .fill(on ? Tone.ink : Tone.ink.opacity(0.2))
-                        .frame(width: i % 6 == 0 ? 4 : 3, height: i % 6 == 0 ? 24 : 14)
-                        .offset(y: -side / 2 + 16)
+                        .fill(isHead ? Color.white : (on ? Tone.ink : Tone.ink.opacity(0.2)))
+                        .frame(width: isHead ? 5 : (i % 6 == 0 ? 4 : 3),
+                               height: isHead ? 32 : (i % 6 == 0 ? 24 : 14))
+                        .shadow(color: isHead ? .white : .clear, radius: 6)
+                        .offset(y: -side / 2 + (isHead ? 20 : 16))
                         .rotationEffect(.degrees(start + sweep * t + 90))
                 }
                 // Marcador: un triángulo que apunta al valor.
@@ -406,9 +517,14 @@ struct Dial: View {
                 Circle()
                     .fill(.black.opacity(0.88))
                     .frame(width: side * 0.5, height: side * 0.5)
-                    .shadow(color: Tone.ink.opacity(0.4), radius: 14, y: 8)
+                    .shadow(color: dragging ? .white.opacity(0.45) : Tone.ink.opacity(0.4),
+                            radius: dragging ? 22 : 14, y: dragging ? 0 : 8)
+                    .scaleEffect(dragging ? 1.04 : 1)
+                    .boing(bump, amount: 0.025)
+                    .animation(.spring(duration: 0.35, bounce: 0.4), value: dragging)
                 VStack(spacing: 2) {
                     Image(systemName: symbol).font(.system(size: 16, weight: .semibold))
+                        .contentTransition(.symbolEffect(.replace))
                     Text("\(Int((value * 100).rounded()))")
                         .font(.system(size: side * 0.15, weight: .semibold, design: .rounded))
                         .monospacedDigit()
@@ -445,6 +561,7 @@ struct Dial: View {
         if tick != lastTick {
             selection.selectionChanged()
             lastTick = tick
+            bump += 1
         }
         return t
     }
@@ -457,10 +574,45 @@ struct GesturePage: View {
     @Environment(\.isLandscape) private var landscape
     @State private var shown: DesktopGesture?
     @State private var clear: DispatchWorkItem?
+    @State private var burst = 0
+    @State private var flashed: DesktopGesture = .spaceRight
+    @State private var trail: [(CGPoint, Date)] = []
 
     var body: some View {
         ZStack {
             EdgeTicks()
+            EdgeFlash(gesture: flashed)
+                .keyframeAnimator(initialValue: 0.0, trigger: burst) { v, o in v.opacity(o) } keyframes: { _ in
+                    LinearKeyframe(1, duration: 0.07)
+                    CubicKeyframe(0, duration: 0.7)
+                }
+            TimelineView(.animation(paused: trail.isEmpty)) { tl in
+                FingerTrail(points: trail, now: tl.date)
+            }
+            // La flecha sale disparada hacia donde va el escritorio.
+            Image(systemName: flashed.symbol)
+                .font(.system(size: 64, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .white, radius: 12)
+                .keyframeAnimator(initialValue: FlyState(), trigger: burst) { v, f in
+                    v.offset(x: flashed.direction.dx * f.travel, y: flashed.direction.dy * f.travel)
+                        .scaleEffect(f.scale)
+                        .opacity(f.opacity)
+                } keyframes: { _ in
+                    KeyframeTrack(\.travel) {
+                        LinearKeyframe(-30, duration: 0.001)
+                        CubicKeyframe(170, duration: 0.55)
+                    }
+                    KeyframeTrack(\.opacity) {
+                        LinearKeyframe(1, duration: 0.12)
+                        CubicKeyframe(0, duration: 0.45)
+                    }
+                    KeyframeTrack(\.scale) {
+                        SpringKeyframe(1.25, duration: 0.2)
+                        CubicKeyframe(flashed == .spotlight ? 2.2 : 0.8, duration: 0.4)
+                    }
+                }
+                .allowsHitTesting(false)
             VStack(spacing: 12) {
                 Image(systemName: shown?.symbol ?? "hand.draw")
                     .font(.system(size: 46, weight: .light))
@@ -486,7 +638,15 @@ struct GesturePage: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { fire(.spotlight) }
         .gesture(
-            DragGesture(minimumDistance: 30).onEnded { v in
+            DragGesture(minimumDistance: 12)
+                .onChanged { v in
+                    let now = Date()
+                    trail.append((v.location, now))
+                    trail.removeAll { now.timeIntervalSince($0.1) > 0.45 }
+                }
+                .onEnded { v in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { trail.removeAll() }
+                guard hypot(v.translation.width, v.translation.height) > 30 else { return }
                 let dx = v.translation.width, dy = v.translation.height
                 if abs(dx) > abs(dy) {
                     // Como en el trackpad: deslizar a la izquierda trae el escritorio de la derecha.
@@ -501,6 +661,8 @@ struct GesturePage: View {
     private func fire(_ g: DesktopGesture) {
         Haptic.thump()
         remote.send(.gesture(g))
+        flashed = g
+        burst += 1
         withAnimation(.spring(duration: 0.3)) { shown = g }
         clear?.cancel()
         let work = DispatchWorkItem { withAnimation(.easeOut(duration: 0.3)) { shown = nil } }
@@ -509,12 +671,20 @@ struct GesturePage: View {
     }
 }
 
+struct FlyState {
+    var travel = 0.0
+    var opacity = 0.0
+    var scale = 1.0
+}
+
 // MARK: - Pad
 
 struct PadPage: View {
     @EnvironmentObject private var remote: Remote
     @Environment(\.isLandscape) private var landscape
     @State private var editing = false
+    @State private var mediaTaps: [MediaKey: Int] = [:]
+    @State private var chipTaps: [UUID: Int] = [:]
 
     var body: some View {
         Group {
@@ -585,6 +755,7 @@ struct PadPage: View {
         ForEach(remote.shortcuts) { s in
             Button {
                 Haptic.tap()
+                chipTaps[s.id, default: 0] += 1
                 remote.send(.shortcut(s))
             } label: {
                 VStack(spacing: 1) {
@@ -595,6 +766,16 @@ struct PadPage: View {
                 .frame(maxWidth: landscape ? .infinity : nil)
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(Capsule().fill(.black.opacity(0.85)))
+                .overlay {
+                    // Destello que recorre el botón al ejecutar el atajo.
+                    Capsule().fill(.white)
+                        .keyframeAnimator(initialValue: 0.0, trigger: chipTaps[s.id, default: 0]) { v, o in v.opacity(o) } keyframes: { _ in
+                            LinearKeyframe(0.55, duration: 0.05)
+                            CubicKeyframe(0, duration: 0.4)
+                        }
+                        .allowsHitTesting(false)
+                }
+                .boing(chipTaps[s.id, default: 0], amount: 0.08)
             }
             .buttonStyle(PressScale())
         }
@@ -625,9 +806,11 @@ struct PadPage: View {
     private func media(_ symbol: String, _ key: MediaKey) -> some View {
         Button {
             Haptic.tap()
+            mediaTaps[key, default: 0] += 1
             remote.send(.media(key))
         } label: {
             Image(systemName: symbol)
+                .symbolEffect(.bounce, value: mediaTaps[key, default: 0])
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: landscape ? 50 : 56, height: landscape ? 50 : 56)
@@ -687,10 +870,97 @@ final class TrackpadSurface: UIView {
     private let tapHaptic = UIImpactFeedbackGenerator(style: .light)
     private let holdHaptic = UIImpactFeedbackGenerator(style: .rigid)
 
+    /// Luz bajo cada dedo. Son capas de Core Animation y no vistas de SwiftUI:
+    /// siguen al dedo a 120 Hz sin reconstruir nada.
+    private var glows: [UITouch: CALayer] = [:]
+    private var lastPoint = CGPoint.zero
+    private var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         backgroundColor = .clear
+        layer.cornerRadius = 30
+        layer.cornerCurve = .continuous
+        clipsToBounds = true
+    }
+
+    // MARK: Efectos
+
+    private func makeGlow(at p: CGPoint) -> CALayer {
+        let g = CAGradientLayer()
+        g.type = .radial
+        g.colors = [UIColor.white.withAlphaComponent(0.55).cgColor, UIColor.white.withAlphaComponent(0).cgColor]
+        g.startPoint = CGPoint(x: 0.5, y: 0.5)
+        g.endPoint = CGPoint(x: 1, y: 1)
+        g.bounds = CGRect(x: 0, y: 0, width: 150, height: 150)
+        g.position = p
+        g.opacity = 0
+        layer.addSublayer(g)
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0
+        fade.toValue = 1
+        fade.duration = 0.15
+        g.add(fade, forKey: "in")
+        g.opacity = 1
+        return g
+    }
+
+    private func dropGlow(_ g: CALayer) {
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { g.removeFromSuperlayer() }
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = g.opacity
+        fade.toValue = 0
+        fade.duration = 0.35
+        g.add(fade, forKey: "out")
+        g.opacity = 0
+        CATransaction.commit()
+    }
+
+    /// En modo arrastre la luz se vuelve más grande y cálida: se nota que "agarraste" algo.
+    private func setDragLook(_ on: Bool) {
+        for g in glows.values {
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.25)
+            g.setAffineTransform(on ? CGAffineTransform(scaleX: 1.5, y: 1.5) : .identity)
+            (g as? CAGradientLayer)?.colors = on
+                ? [UIColor(red: 1, green: 0.95, blue: 0.85, alpha: 0.8).cgColor, UIColor.white.withAlphaComponent(0).cgColor]
+                : [UIColor.white.withAlphaComponent(0.55).cgColor, UIColor.white.withAlphaComponent(0).cgColor]
+            CATransaction.commit()
+        }
+    }
+
+    /// Onda del clic: una para el izquierdo, dos para el derecho.
+    private func ripple(at p: CGPoint, rings: Int) {
+        for i in 0..<rings {
+            let ring = CAShapeLayer()
+            let r: CGFloat = 34
+            ring.path = UIBezierPath(ovalIn: CGRect(x: -r, y: -r, width: 2 * r, height: 2 * r)).cgPath
+            ring.position = p
+            ring.fillColor = UIColor.clear.cgColor
+            ring.strokeColor = UIColor.white.cgColor
+            ring.lineWidth = 2.5
+            ring.opacity = 0
+            layer.addSublayer(ring)
+
+            let scale = CABasicAnimation(keyPath: "transform.scale")
+            scale.fromValue = 0.35
+            scale.toValue = reduceMotion ? 0.35 : 1.7
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0.95
+            fade.toValue = 0
+            let group = CAAnimationGroup()
+            group.animations = [scale, fade]
+            group.duration = 0.5
+            group.beginTime = CACurrentMediaTime() + Double(i) * 0.1
+            group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            group.fillMode = .backwards
+            CATransaction.begin()
+            CATransaction.setCompletionBlock { ring.removeFromSuperlayer() }
+            ring.add(group, forKey: "ripple")
+            CATransaction.commit()
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -709,10 +979,16 @@ final class TrackpadSurface: UIView {
                 guard let self, self.active.count == 1, self.travel < 8, !self.dragging else { return }
                 self.dragging = true
                 self.holdHaptic.impactOccurred()
+                self.setDragLook(true)
                 self.onPress?(true)
             }
         }
-        for t in touches { active[t] = t.location(in: self) }
+        for t in touches {
+            let p = t.location(in: self)
+            active[t] = p
+            glows[t] = makeGlow(at: p)
+            lastPoint = p
+        }
         if Date().timeIntervalSince(firstDown) < 0.2 { together = max(together, active.count) }
         if active.count > 1 { holdTimer?.invalidate() }
     }
@@ -726,6 +1002,11 @@ final class TrackpadSurface: UIView {
             dy += p.y - prev.y
             active[t] = p
             n += 1
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            glows[t]?.position = p
+            CATransaction.commit()
+            lastPoint = p
         }
         guard n > 0 else { return }
         dx /= n
@@ -745,6 +1026,7 @@ final class TrackpadSurface: UIView {
             if tapDragArmed, !dragging, travel > 4 {
                 dragging = true
                 holdHaptic.impactOccurred()
+                setDragLook(true)
                 onPress?(true)
             }
             onMove?(dx, dy)
@@ -760,7 +1042,10 @@ final class TrackpadSurface: UIView {
     }
 
     private func finish(_ touches: Set<UITouch>) {
-        for t in touches { active[t] = nil }
+        for t in touches {
+            active[t] = nil
+            if let g = glows.removeValue(forKey: t) { dropGlow(g) }
+        }
         guard active.isEmpty else { return }
         holdTimer?.invalidate()
 
@@ -770,6 +1055,7 @@ final class TrackpadSurface: UIView {
             onPress?(false)
         } else if quick {
             tapHaptic.impactOccurred()
+            ripple(at: lastPoint, rings: together >= 2 ? 2 : 1)
             if together >= 2 {
                 onClick?(.right)
             } else {
