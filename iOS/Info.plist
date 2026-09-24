@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Zarcillo se anuncia por Bluetooth para que tu Mac se bloquee cuando te alejas.</string>
 	<key>NSBonjourServices</key>
@@ -36,6 +38,8 @@
 	<string>Zarcillo escucha la clase para transcribirla en tu Mac, y tus órdenes de voz.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Zarcillo guarda en Fotos el póster de la canción que estás escuchando.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>El reloj puede agarrar tu última foto para lanzarla al Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>La transcripción se hace en el propio iPhone, sin internet.</string>
 	<key>NSUserNotificationsUsageDescription</key>
@@ -45,6 +49,8 @@
 		<string>audio</string>
 		<string>bluetooth-peripheral</string>
 	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

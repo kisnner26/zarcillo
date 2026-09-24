@@ -11,10 +11,12 @@ struct ZarcilloApp: App {
                 .environmentObject(remote)
                 .preferredColorScheme(.dark)
                 .persistentSystemOverlays(.hidden)
+                .onAppear { WatchLink.shared.start(remote) }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 remote.resume()
+                WatchLink.shared.becameActive()
                 // Por si quedó un pedido de orientación colgado: el giro es libre.
                 Orientation.request(.allButUpsideDown)
             }

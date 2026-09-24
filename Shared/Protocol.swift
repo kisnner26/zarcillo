@@ -312,6 +312,9 @@ enum Command: Codable {
     case pointTo(x: Double, y: Double)
     /// La pestaña que ves en el navegador del Mac, para abrirla en el iPhone.
     case pullTab
+    /// El reloj "agarra" lo que tienes delante en el Mac: la selección del
+    /// Finder, la pestaña del navegador, el portapapeles o, si no, la pantalla.
+    case grab
 }
 
 /// Mac → iPhone.
@@ -346,6 +349,8 @@ enum Event: Codable {
     case detached(title: String?)
     case mixer([MixerApp])
     case tab(url: String, title: String)
+    /// Lo agarrado: kind es image, file, url o text.
+    case grabbed(kind: String, name: String, data: Data?, text: String?)
 }
 
 /// Qué parte de la pantalla sigue cada foco.

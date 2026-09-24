@@ -65,6 +65,8 @@ struct TossPage: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .onChange(of: picks) { _, items in load(items) }
+        .onChange(of: stack.count) { _, _ in PhotoTray.shared.top = stack.last?.data }
+        .onDisappear { PhotoTray.shared.top = nil }
     }
 
     private var empty: some View {
@@ -143,6 +145,22 @@ struct TossPage: View {
                     .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
             }
             Spacer()
+            // La de arriba, a la mano del reloj: se lanza al Mac con la muñeca.
+            Button {
+                guard let top = stack.last else { return }
+                Detents.shared.press()
+                WatchLink.shared.handToWatch(top.data)
+                withAnimation(.spring(duration: 0.35)) { _ = stack.popLast() }
+            } label: {
+                Image(systemName: "applewatch.radiowaves.left.and.right")
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.85))
+                    .frame(width: Space.tap, height: Space.tap)
+                    .background(Circle().fill(Tone.key))
+                    .overlay(Circle().stroke(Tone.stroke, lineWidth: 1))
+            }
+            .buttonStyle(PressScale())
+            .accessibilityLabel("dar al reloj")
+            .disabled(stack.isEmpty)
             Text(stack.count == 1 ? "1 foto" : "\(stack.count) fotos")
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.5))
                 .contentTransition(.numericText())

@@ -5,19 +5,23 @@ options:
   deploymentTarget:
     iOS: "18.0"
     macOS: "15.0"
+    watchOS: "11.0"
 settings:
   base:
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: HQVD2Y42HM
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    # Mayor que la de Clavis: se instala en su lugar sin desinstalarla.
+    CURRENT_PROJECT_VERSION: "2609250000"
 
 targets:
   Zarcillo:
     type: application
     platform: iOS
     sources: [iOS, Shared]
+    dependencies:
+      - target: ZarcilloWatch
     info:
       path: iOS/Info.plist
       properties:
@@ -35,11 +39,15 @@ targets:
         NSUserNotificationsUsageDescription: Zarcillo te avisa si alguien toca tu Mac.
         NSCameraUsageDescription: Zarcillo usa la cámara para leer texto, escanear pizarras o apuntes hacia tu Mac, y para mover el cursor con la mirada.
         NSPhotoLibraryAddUsageDescription: Zarcillo guarda en Fotos el póster de la canción que estás escuchando.
+        NSPhotoLibraryUsageDescription: El reloj puede agarrar tu última foto para lanzarla al Mac.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         # Cuenta gratuita: límite de 10 App IDs nuevos por semana. Se reutiliza
-        # uno ya registrado; cámbialo por com.kisnner.zarcillo cuando se libere.
-        PRODUCT_BUNDLE_IDENTIFIER: com.kisnner26.longrec
+        # el par ya registrado de Clavis (iPhone + reloj); cámbialo por
+        # com.kisnner.zarcillo cuando se libere.
+        PRODUCT_BUNDLE_IDENTIFIER: com.kisnner26.clavis
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
@@ -67,3 +75,24 @@ targets:
         PRODUCT_NAME: Zarcillo
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: NO
+
+  ZarcilloWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - Watch
+      - Shared/Shapes.swift
+    info:
+      path: Watch/Info.plist
+      properties:
+        CFBundleDisplayName: Zarcillo
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.kisnner26.clavis
+        WKBackgroundModes: [mindfulness]
+        NSMotionUsageDescription: Zarcillo siente el gesto de tu muñeca para lanzar fotos y links entre tu iPhone y tu Mac.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kisnner26.clavis.watchkitapp
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

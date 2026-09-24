@@ -115,6 +115,10 @@ final class Remote: ObservableObject {
     @Published private(set) var guestURL: String?
     @Published private(set) var guestExpires: Date?
     @Published private(set) var detachedTitle: String?
+    /// Lo que el Mac entregó cuando el reloj pidió agarrar algo.
+    var onGrabbed: ((String, String, Data?, String?) -> Void)?
+    /// Órdenes que llegaron sin conexión (por ejemplo, del reloj con la app dormida): salen al conectar.
+    private var outbox: [Command] = []
     @Published private(set) var mixerApps: [MixerApp] = []
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
@@ -285,6 +289,9 @@ final class Remote: ObservableObject {
             send(.hello(device: UIDevice.current.name))
             send(.syncRoutines(routines))
             send(.accent(hex: Int(Theme.shared.hex)))
+            let queued = outbox
+            outbox = []
+            queued.forEach { send($0) }
         case .waiting(let error), .failed(let error):
             if case .tls = error, case .connecting = phase { wrongCode(mac); return }
             if case .failed = state { lost() }
@@ -424,6 +431,8 @@ final class Remote: ObservableObject {
         case .guestPass(let url, let expires):
             guestURL = url
             guestExpires = expires.map { Date(timeIntervalSince1970: $0) }
+        case .grabbed(let kind, let name, let data, let text):
+            onGrabbed?(kind, name, data, text)
         case .detached(let title):
             detachedTitle = title
         case .mixer(let list):
@@ -530,6 +539,23 @@ final class Remote: ObservableObject {
 
     func send(_ command: Command) {
         channel?.send(command)
+    }
+
+    /// Como `send`, pero si aún no hay conexión la guarda y la manda al conectar.
+    func deliver(_ command: Command) {
+        if case .connected = phase, let channel {
+            channel.send(command)
+        } else {
+            outbox.append(command)
+            if outbox.count > 20 { outbox.removeFirst() }
+            if channel == nil { found(macs) }
+        }
+    }
+
+    /// Una hoja que cae en la pantalla del iPhone con esta imagen.
+    func showLeaf(_ img: UIImage) {
+        harvestImage = img
+        harvests += 1
     }
 
     // MARK: Entrada rápida

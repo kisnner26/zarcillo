@@ -543,6 +543,26 @@ final class Server: ObservableObject {
                 }
             }
 
+        case .grab:
+            musicQueue.async { [weak self] in
+                let front = MacGrab.fromFrontApp()
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        Task { @MainActor in
+                            var item = front ?? MacGrab.fromClipboard()
+                            if item == nil { item = await MacGrab.screen() }
+                            guard let item else {
+                                self.reply(key, .status("no hay nada que agarrar en el Mac"))
+                                return
+                            }
+                            self.reply(key, .grabbed(kind: item.kind, name: item.name, data: item.data, text: item.text))
+                            self.hud.showMessage("el reloj agarró \(item.name)", symbol: "applewatch")
+                        }
+                    }
+                }
+            }
+
         case .photo(let data):
             photos.receive(data)
             reply(key, .status("foto recibida en el Mac"))
