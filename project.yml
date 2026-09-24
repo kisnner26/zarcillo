@@ -1,0 +1,58 @@
+name: Zarcillo
+options:
+  bundleIdPrefix: com.kisnner
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: HQVD2Y42HM
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  Zarcillo:
+    type: application
+    platform: iOS
+    sources: [iOS, Shared]
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Zarcillo
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSLocalNetworkUsageDescription: Zarcillo busca tu Mac en la red Wi-Fi para controlarlo.
+        NSBonjourServices: [_zarcillo._tcp]
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        # Cuenta gratuita: límite de 10 App IDs nuevos por semana. Se reutiliza
+        # uno ya registrado; cámbialo por com.kisnner.zarcillo cuando se libere.
+        PRODUCT_BUNDLE_IDENTIFIER: com.kisnner26.longrec
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  ZarcilloMac:
+    type: application
+    platform: macOS
+    sources: [Mac, Shared]
+    info:
+      path: Mac/Info.plist
+      properties:
+        CFBundleName: Zarcillo
+        CFBundleDisplayName: Zarcillo
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.utilities
+        NSLocalNetworkUsageDescription: Zarcillo anuncia este Mac en la red Wi-Fi para que tu iPhone lo encuentre.
+        NSBonjourServices: [_zarcillo._tcp]
+        NSHumanReadableCopyright: © 2026 Kisnner Obando
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kisnner.zarcillo.mac
+        PRODUCT_NAME: Zarcillo
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: NO
