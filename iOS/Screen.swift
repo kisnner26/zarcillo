@@ -8,10 +8,36 @@ struct ScreenPage: View {
     @EnvironmentObject private var remote: Remote
     @State private var full = false
     @State private var harvesting = false
+    @State private var zoom: CGFloat = 1
 
     var body: some View {
-        LiveScreen(zoomable: false, harvesting: $harvesting)
+        LiveScreen(zoomable: false, zoomOut: $zoom, harvesting: $harvesting)
             .padding(10)
+            .overlay(alignment: .top) {
+                if harvesting {
+                    HStack(spacing: Space.s) {
+                        Text(zoom > 1.02 ? "encierra la zona con un dedo" : "pellizca para acercar · un dedo encierra")
+                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                        if zoom > 1.02 {
+                            Button {
+                                Haptic.tap()
+                                zoom = 1
+                            } label: {
+                                Text("\(Int((zoom * 100).rounded())) %")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded)).monospacedDigit()
+                                    .foregroundStyle(Tone.onEmber)
+                                    .padding(.horizontal, 10).frame(height: 30)
+                                    .background(Capsule().fill(Tone.ember))
+                            }
+                        }
+                    }
+                    .padding(.leading, 14).padding(.trailing, zoom > 1.02 ? 6 : 14).frame(height: 42)
+                    .background(Capsule().fill(.black.opacity(0.6)))
+                    .padding(.top, Space.l)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(duration: 0.3), value: zoom > 1.02)
+                }
+            }
             .overlay(alignment: .bottomLeading) {
                 if remote.frame != nil {
                     Button {
@@ -60,12 +86,28 @@ struct FullScreenMac: View {
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: CGFloat = 1
     @State private var hint = true
+    @State private var harvesting = false
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            LiveScreen(zoomable: true, zoomOut: $zoom)
+            LiveScreen(zoomable: true, zoomOut: $zoom, harvesting: $harvesting)
                 .ignoresSafeArea()
+        }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                Detents.shared.press()
+                withAnimation(.spring(duration: 0.3)) { harvesting.toggle() }
+            } label: {
+                Label(harvesting ? "encierra una zona" : "cosechar", systemImage: "leaf.fill")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(harvesting ? Tone.onEmber : .white)
+                    .padding(.horizontal, 14).frame(height: 44)
+                    .background(Capsule().fill(harvesting ? Tone.ember : .black.opacity(0.55)))
+                    .overlay(Capsule().stroke(.white.opacity(harvesting ? 0 : 0.15), lineWidth: 1))
+            }
+            .buttonStyle(PressScale())
+            .padding(Space.m)
         }
         .overlay(alignment: .topLeading) {
             HStack(spacing: Space.s) {
@@ -99,7 +141,7 @@ struct FullScreenMac: View {
         }
         .overlay(alignment: .bottom) {
             if hint {
-                Text("pellizca para acercar · arrastra para moverte · toca para hacer clic")
+                Text("pellizca para acercar donde quieras · arrastra para moverte · toca para hacer clic")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -142,6 +184,12 @@ struct LiveScreen: View {
     @State private var baseOffset: CGSize = .zero
     @State private var tapPoint: CGPoint?
     @State private var taps = 0
+    /// Hubo dos dedos durante este trazo: no era un lazo, era un pellizco.
+    @State private var pinched = false
+    @State private var lassoActive = false
+    @State private var lastCentroid: CGPoint?
+
+    private var isHarvesting: Bool { harvesting?.wrappedValue == true }
 
     var body: some View {
         GeometryReader { geo in
@@ -173,6 +221,7 @@ struct LiveScreen: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
             .overlay {
                 if let r = lasso {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -194,7 +243,29 @@ struct LiveScreen: View {
                         if case .second(true, let drag?) = value { click(drag.location, geo.size, .right) }
                     }
             )
-            .gesture(zoomGesture, including: zoomable ? .all : .none)
+            // Dos dedos acercan donde pellizcas y mueven la imagen, también
+            // mientras cosechas: así se puede encerrar cualquier detalle.
+            .gesture(PinchPan(
+                began: { c in
+                    guard zoomable || isHarvesting else { return }
+                    pinched = true
+                    lasso = nil
+                    lastCentroid = c
+                },
+                changed: { k, c in
+                    guard zoomable || isHarvesting else { return }
+                    pinch(by: k, at: c, geo.size)
+                },
+                ended: {
+                    lastCentroid = nil
+                    if scale < 1.05 { withAnimation(.spring(duration: 0.35)) { reset() } }
+                    if !lassoActive { pinched = false }
+                }))
+            .gesture(panGesture(geo.size), including: zoomable && !isHarvesting ? .all : .none)
+            .onChange(of: isHarvesting) { _, on in
+                // En el escenario pequeño, al terminar de cosechar se vuelve al 100 %.
+                if !on, !zoomable, scale != 1 { withAnimation(.spring(duration: 0.4)) { reset() } }
+            }
             .onChange(of: zoomOut?.wrappedValue) { _, z in
                 // El botón de porcentaje vuelve al 100 %.
                 if z == 1, scale != 1 { withAnimation(.spring(duration: 0.4)) { reset() } }
@@ -206,10 +277,19 @@ struct LiveScreen: View {
     private func harvestGesture(_ box: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { v in
+                lassoActive = true
+                guard !pinched else { lasso = nil; return }
                 lasso = CGRect(x: min(v.startLocation.x, v.location.x), y: min(v.startLocation.y, v.location.y),
                                width: abs(v.location.x - v.startLocation.x), height: abs(v.location.y - v.startLocation.y))
             }
             .onEnded { _ in
+                lassoActive = false
+                // Si el trazo terminó en pellizco, no se cosecha ni se sale del modo.
+                if pinched {
+                    pinched = false
+                    lasso = nil
+                    return
+                }
                 defer {
                     withAnimation(.easeOut(duration: 0.3)) { lasso = nil }
                     harvesting?.wrappedValue = false
@@ -230,23 +310,42 @@ struct LiveScreen: View {
         return CGPoint(x: min(1, max(0, x)), y: min(1, max(0, y)))
     }
 
-    private var zoomGesture: some Gesture {
-        MagnifyGesture()
+    /// Con zoom, un dedo arrastra la imagen (fuera del modo cosechar).
+    private func panGesture(_ box: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 12)
             .onChanged { v in
-                scale = min(5, max(1, base * v.magnification))
-                zoomOut?.wrappedValue = scale
+                guard scale > 1 else { return }
+                offset = clamped(CGSize(width: baseOffset.width + v.translation.width,
+                                        height: baseOffset.height + v.translation.height), box)
             }
-            .onEnded { _ in
-                base = scale
-                if scale < 1.05 { withAnimation(.spring(duration: 0.35)) { reset() } }
-            }
-            .simultaneously(with: DragGesture(minimumDistance: 12)
-                .onChanged { v in
-                    guard scale > 1 else { return }
-                    offset = CGSize(width: baseOffset.width + v.translation.width,
-                                    height: baseOffset.height + v.translation.height)
-                }
-                .onEnded { _ in baseOffset = offset })
+            .onEnded { _ in baseOffset = offset }
+    }
+
+    /// Acerca `k` veces dejando fijo el punto bajo los dedos, y sigue su desplazamiento.
+    private func pinch(by k: CGFloat, at c: CGPoint, _ box: CGSize) {
+        let center = CGPoint(x: box.width / 2, y: box.height / 2)
+        let newScale = min(6, max(1, scale * k))
+        // El punto de la imagen que estaba bajo los dedos queda bajo los dedos,
+        // donde sea que se hayan movido: eso acerca y desplaza a la vez.
+        let from = lastCentroid ?? c
+        let qx = (from.x - center.x - offset.width) / scale
+        let qy = (from.y - center.y - offset.height) / scale
+        let o = CGSize(width: c.x - center.x - qx * newScale, height: c.y - center.y - qy * newScale)
+        lastCentroid = c
+        scale = newScale
+        base = newScale
+        offset = clamped(o, box)
+        baseOffset = offset
+        zoomOut?.wrappedValue = scale
+    }
+
+    /// Que la imagen no se escape: su borde nunca pasa del borde de la vista.
+    private func clamped(_ o: CGSize, _ box: CGSize) -> CGSize {
+        guard let img = remote.frame else { return o }
+        let fit = fitted(img.size, in: box)
+        let mx = max(0, (fit.width * scale - box.width) / 2)
+        let my = max(0, (fit.height * scale - box.height) / 2)
+        return CGSize(width: min(mx, max(-mx, o.width)), height: min(my, max(-my, o.height)))
     }
 
     private func reset() {
@@ -299,5 +398,31 @@ enum Orientation {
     static func request(_ mask: UIInterfaceOrientationMask) {
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+    }
+}
+
+/// Pellizco de dos dedos con su centro: acercar y mover a la vez. Va en UIKit
+/// porque SwiftUI no da el punto del pellizco mientras cambia.
+struct PinchPan: UIGestureRecognizerRepresentable {
+    let began: (CGPoint) -> Void
+    let changed: (CGFloat, CGPoint) -> Void
+    let ended: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPinchGestureRecognizer {
+        let r = UIPinchGestureRecognizer()
+        r.cancelsTouchesInView = false
+        return r
+    }
+
+    func handleUIGestureRecognizerAction(_ r: UIPinchGestureRecognizer, context: Context) {
+        guard r.numberOfTouches >= 2 || r.state == .ended || r.state == .cancelled else { return }
+        let c = context.converter.localLocation
+        switch r.state {
+        case .began: began(c)
+        case .changed:
+            changed(r.scale, c)
+            r.scale = 1
+        default: ended()
+        }
     }
 }
