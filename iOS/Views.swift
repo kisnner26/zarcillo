@@ -69,15 +69,24 @@ enum Haptic {
 
 // MARK: - Raíz
 
+/// En un iPhone, horizontal = altura compacta.
+extension EnvironmentValues {
+    var isLandscape: Bool { verticalSizeClass == .compact }
+}
+
 struct RootView: View {
     @EnvironmentObject private var remote: Remote
+    @Environment(\.isLandscape) private var landscape
     @State private var page = 0
 
     var body: some View {
         ZStack {
             Glow()
             if case .connected = remote.phase {
-                VStack(spacing: 0) {
+                // En horizontal sobra ancho y falta alto: la barra pasa a un riel a la izquierda.
+                let layout = landscape ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
+                layout {
+                    if landscape { PageBar(page: $page, vertical: true) }
                     Group {
                         switch page {
                         case 0: AppsPage()
@@ -88,7 +97,7 @@ struct RootView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .transition(.opacity)
-                    PageBar(page: $page)
+                    if !landscape { PageBar(page: $page, vertical: false) }
                 }
             } else {
                 ConnectView()
@@ -125,11 +134,13 @@ struct StatusPill: View {
 
 struct PageBar: View {
     @Binding var page: Int
+    var vertical: Bool
     private let items = [("square.grid.2x2.fill", "apps"), ("dial.medium.fill", "dial"),
                          ("hand.draw.fill", "gestos"), ("hand.point.up.left.fill", "pad")]
 
     var body: some View {
-        HStack(spacing: 4) {
+        let layout = vertical ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
+        layout {
             ForEach(items.indices, id: \.self) { i in
                 Button {
                     Haptic.tap()
@@ -140,7 +151,8 @@ struct PageBar: View {
                         Text(items[i].1).font(.system(size: 10, weight: .semibold))
                     }
                     .foregroundStyle(page == i ? .white : .white.opacity(0.5))
-                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .frame(maxWidth: vertical ? 56 : .infinity, maxHeight: vertical ? .infinity : nil)
+                    .padding(.vertical, 8)
                     .background(Capsule().fill(page == i ? Color.white.opacity(0.16) : .clear))
                 }
                 .buttonStyle(.plain)
@@ -148,7 +160,8 @@ struct PageBar: View {
         }
         .padding(5)
         .background(Capsule().fill(.black.opacity(0.82)))
-        .padding(.horizontal, 22).padding(.bottom, 6)
+        .padding(vertical ? .vertical : .horizontal, vertical ? 10 : 22)
+        .padding(vertical ? .leading : .bottom, 6)
     }
 }
 
@@ -156,15 +169,43 @@ struct PageBar: View {
 
 struct ConnectView: View {
     @EnvironmentObject private var remote: Remote
+    @Environment(\.isLandscape) private var landscape
     @State private var code = ""
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(spacing: 18) {
-            Spacer()
+        Group {
+            if landscape {
+                HStack(spacing: 40) {
+                    brand
+                    VStack(spacing: 14) { content }.frame(maxWidth: 380)
+                }
+                .frame(maxHeight: .infinity)
+            } else {
+                VStack(spacing: 18) {
+                    Spacer()
+                    brand
+                    content
+                    Spacer()
+                    Spacer()
+                }
+            }
+        }
+        .padding(.horizontal, 28)
+        .onChange(of: remote.phase) { _, p in
+            if case .needsCode = p { code = ""; focused = true }
+        }
+        .onAppear { if case .needsCode = remote.phase { focused = true } }
+    }
+
+    private var brand: some View {
+        VStack(spacing: 10) {
             Image(systemName: "leaf.fill").font(.system(size: 40)).foregroundStyle(Tone.ink.opacity(0.8))
             Text("Zarcillo").font(.system(size: 34, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+        }
+    }
 
+    @ViewBuilder private var content: some View {
             switch remote.phase {
             case .searching:
                 ProgressView().tint(Tone.ink)
@@ -195,14 +236,6 @@ struct ConnectView: View {
             case .connected:
                 EmptyView()
             }
-            Spacer()
-            Spacer()
-        }
-        .padding(.horizontal, 28)
-        .onChange(of: remote.phase) { _, p in
-            if case .needsCode = p { code = ""; focused = true }
-        }
-        .onAppear { if case .needsCode = remote.phase { focused = true } }
     }
 
     private func hint(_ text: String) -> some View {
@@ -243,13 +276,15 @@ struct ConnectView: View {
 
 struct AppsPage: View {
     @EnvironmentObject private var remote: Remote
+    @Environment(\.isLandscape) private var landscape
 
     var body: some View {
         ScrollView {
             if remote.apps.isEmpty {
                 ProgressView().tint(Tone.ink).padding(.top, 140)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: 16)], spacing: 22) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: landscape ? 70 : 74), spacing: 16)],
+                      spacing: landscape ? 16 : 22) {
                 ForEach(remote.apps) { app in
                     Button {
                         Haptic.thump()
@@ -258,7 +293,7 @@ struct AppsPage: View {
                         VStack(spacing: 6) {
                             if let image = remote.icons[app.id] {
                                 Image(uiImage: image).resizable().interpolation(.high)
-                                    .frame(width: 70, height: 70)
+                                    .frame(width: landscape ? 62 : 70, height: landscape ? 62 : 70)
                                     .shadow(color: Tone.ink.opacity(0.35), radius: 8, y: 5)
                             }
                             Circle().fill(Tone.ink.opacity(app.running ? 0.7 : 0)).frame(width: 5, height: 5)
@@ -268,7 +303,7 @@ struct AppsPage: View {
                     .accessibilityLabel(app.name)
                 }
             }
-            .padding(.horizontal, 20).padding(.top, 60).padding(.bottom, 16)
+            .padding(.horizontal, 20).padding(.top, landscape ? 44 : 60).padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
         .refreshable { remote.send(.listApps) }
@@ -279,29 +314,44 @@ struct AppsPage: View {
 
 struct DialPage: View {
     @EnvironmentObject private var remote: Remote
+    @Environment(\.isLandscape) private var landscape
     @State private var kind: LevelKind = .volume
 
     var body: some View {
-        VStack(spacing: 26) {
-            HStack(spacing: 8) {
-                chip("volumen", "speaker.wave.2.fill", .volume)
-                chip("brillo", "sun.max.fill", .brightness).disabled(remote.brightness == nil)
-            }
-            Dial(value: kind == .volume ? remote.volume : (remote.brightness ?? 0),
-                 symbol: kind == .volume ? "speaker.wave.2.fill" : "sun.max.fill") { value, phase in
-                switch phase {
-                case .began: remote.editingLevel = true
-                case .changed: remote.setLevel(kind, value, final: false)
-                case .ended:
-                    remote.setLevel(kind, value, final: true)
-                    remote.editingLevel = false
+        Group {
+            if landscape {
+                HStack(spacing: 36) {
+                    VStack(alignment: .leading, spacing: 10) { chips }
+                    dial.padding(.vertical, 26)
                 }
+            } else {
+                VStack(spacing: 26) {
+                    HStack(spacing: 8) { chips }
+                    dial.frame(maxWidth: 330, maxHeight: 330).padding(.horizontal, 20)
+                }
+                .padding(.top, 56)
             }
-            .frame(maxWidth: 330, maxHeight: 330)
-            .padding(.horizontal, 20)
         }
-        .padding(.top, 56)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(EdgeTicks())
+    }
+
+    @ViewBuilder private var chips: some View {
+        chip("volumen", "speaker.wave.2.fill", .volume)
+        chip("brillo", "sun.max.fill", .brightness).disabled(remote.brightness == nil)
+    }
+
+    private var dial: some View {
+        Dial(value: kind == .volume ? remote.volume : (remote.brightness ?? 0),
+             symbol: kind == .volume ? "speaker.wave.2.fill" : "sun.max.fill") { value, phase in
+            switch phase {
+            case .began: remote.editingLevel = true
+            case .changed: remote.setLevel(kind, value, final: false)
+            case .ended:
+                remote.setLevel(kind, value, final: true)
+                remote.editingLevel = false
+            }
+        }
     }
 
     private func chip(_ title: String, _ symbol: String, _ k: LevelKind) -> some View {
@@ -404,6 +454,7 @@ struct Dial: View {
 
 struct GesturePage: View {
     @EnvironmentObject private var remote: Remote
+    @Environment(\.isLandscape) private var landscape
     @State private var shown: DesktopGesture?
     @State private var clear: DispatchWorkItem?
 
@@ -423,11 +474,13 @@ struct GesturePage: View {
 
             VStack {
                 Spacer()
-                Text("← →  escritorios   ·   ↑  Mission Control\n↓  ventanas de la app   ·   doble toque  Spotlight")
+                Text(landscape
+                     ? "← →  escritorios   ·   ↑  Mission Control   ·   ↓  ventanas de la app   ·   doble toque  Spotlight"
+                     : "← →  escritorios   ·   ↑  Mission Control\n↓  ventanas de la app   ·   doble toque  Spotlight")
                     .font(.system(size: 11, weight: .medium))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Tone.ink.opacity(0.55))
-                    .padding(.bottom, 22)
+                    .padding(.bottom, landscape ? 16 : 22)
             }
         }
         .contentShape(Rectangle())
@@ -460,67 +513,98 @@ struct GesturePage: View {
 
 struct PadPage: View {
     @EnvironmentObject private var remote: Remote
+    @Environment(\.isLandscape) private var landscape
     @State private var editing = false
 
     var body: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Tone.ink.opacity(0.1))
-                RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(Tone.ink.opacity(0.2), lineWidth: 1)
-                Text("un dedo mueve · toque = clic · dos toques = doble clic\ndos dedos desplazan · toque con dos a la vez = clic derecho\ntoca y arrastra, o mantén, para arrastrar")
-                    .font(.system(size: 11, weight: .medium))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Tone.ink.opacity(0.4))
-                    .allowsHitTesting(false)
-                Trackpad(remote: remote)
-            }
-            .padding(.top, 52)
-
-            // Botones de clic, como los de un portátil: para cuando un toque no es cómodo.
-            HStack(spacing: 2) {
-                clickButton("clic", .left)
-                clickButton("clic derecho", .right)
-            }
-            .clipShape(Capsule())
-
-            HStack(spacing: 18) {
-                media("backward.fill", .previous)
-                media("playpause.fill", .playPause)
-                media("forward.fill", .next)
-            }
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(remote.shortcuts) { s in
-                        Button {
-                            Haptic.tap()
-                            remote.send(.shortcut(s))
-                        } label: {
-                            VStack(spacing: 1) {
-                                Text(s.glyphs).font(.system(size: 13, weight: .semibold, design: .rounded))
-                                Text(s.title).font(.system(size: 10, weight: .medium)).opacity(0.7)
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .background(Capsule().fill(.black.opacity(0.85)))
+        Group {
+            if landscape {
+                // El trackpad se aprovecha a lo ancho, como el de un portátil.
+                HStack(spacing: 14) {
+                    VStack(spacing: 10) {
+                        surface
+                        clickRow
+                    }
+                    VStack(spacing: 12) {
+                        HStack(spacing: 10) { mediaButtons }
+                        ScrollView {
+                            VStack(spacing: 8) { shortcutChips }
                         }
-                        .buttonStyle(PressScale())
+                        .scrollIndicators(.hidden)
                     }
-                    Button { editing = true } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Tone.ink)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(Tone.ink.opacity(0.12)))
-                    }
+                    .frame(width: 200)
                 }
-                .padding(.horizontal, 2)
+                .padding(.top, 40)
+                .padding(.trailing, 6)
+            } else {
+                VStack(spacing: 14) {
+                    surface.padding(.top, 52)
+                    clickRow
+                    HStack(spacing: 18) { mediaButtons }
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) { shortcutChips }.padding(.horizontal, 2)
+                    }
+                    .scrollIndicators(.hidden)
+                }
             }
-            .scrollIndicators(.hidden)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .sheet(isPresented: $editing) { ShortcutEditor().environmentObject(remote) }
+    }
+
+    private var surface: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Tone.ink.opacity(0.1))
+            RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(Tone.ink.opacity(0.2), lineWidth: 1)
+            Text("un dedo mueve · toque = clic · dos toques = doble clic\ndos dedos desplazan · toque con dos a la vez = clic derecho\ntoca y arrastra, o mantén, para arrastrar")
+                .font(.system(size: 11, weight: .medium))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Tone.ink.opacity(0.4))
+                .allowsHitTesting(false)
+            Trackpad(remote: remote)
+        }
+    }
+
+    // Botones de clic, como los de un portátil: para cuando un toque no es cómodo.
+    private var clickRow: some View {
+        HStack(spacing: 2) {
+            clickButton("clic", .left)
+            clickButton("clic derecho", .right)
+        }
+        .clipShape(Capsule())
+    }
+
+    @ViewBuilder private var mediaButtons: some View {
+        media("backward.fill", .previous)
+        media("playpause.fill", .playPause)
+        media("forward.fill", .next)
+    }
+
+    @ViewBuilder private var shortcutChips: some View {
+        ForEach(remote.shortcuts) { s in
+            Button {
+                Haptic.tap()
+                remote.send(.shortcut(s))
+            } label: {
+                VStack(spacing: 1) {
+                    Text(s.glyphs).font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Text(s.title).font(.system(size: 10, weight: .medium)).opacity(0.7)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: landscape ? .infinity : nil)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(.black.opacity(0.85)))
+            }
+            .buttonStyle(PressScale())
+        }
+        Button { editing = true } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Tone.ink)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(Tone.ink.opacity(0.12)))
+        }
     }
 
     private func clickButton(_ title: String, _ button: MouseButton) -> some View {
@@ -546,7 +630,7 @@ struct PadPage: View {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
+                .frame(width: landscape ? 50 : 56, height: landscape ? 50 : 56)
                 .background(Circle().fill(.black.opacity(0.85)))
         }
         .buttonStyle(PressScale())
