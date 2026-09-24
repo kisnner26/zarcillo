@@ -28,6 +28,9 @@ targets:
         NSLocalNetworkUsageDescription: Zarcillo busca tu Mac en la red Wi-Fi para controlarlo.
         NSBonjourServices: [_zarcillo._tcp]
         ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Zarcillo escucha la clase para transcribirla en tu Mac, y tus órdenes de voz.
+        NSSpeechRecognitionUsageDescription: La transcripción se hace en el propio iPhone, sin internet.
+        UIBackgroundModes: [audio]
         NSCameraUsageDescription: Zarcillo usa la cámara para leer texto y escanear pizarras o apuntes hacia tu Mac.
         NSPhotoLibraryAddUsageDescription: Zarcillo guarda en Fotos el póster de la canción que estás escuchando.
     settings:

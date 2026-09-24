@@ -18,6 +18,7 @@ final class Server: ObservableObject {
     let laser = Laser()
     let photos = PhotoDrop()
     let lights = Lights()
+    let liveClass = LiveClass()
     let macName = Host.current().localizedName ?? "Mac"
 
     /// Clientes que están mirando la pantalla en vivo.
@@ -363,6 +364,23 @@ final class Server: ObservableObject {
             if let url = NotesArchive.save(pages) {
                 hud.showMessage("apuntes guardados", symbol: "doc.viewfinder")
                 reply(key, .status("guardado en Documentos › Zarcillo › Apuntes"))
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+
+        case .transcriptStart(let title, _):
+            liveClass.start(title: title)
+            hud.showMessage("transcribiendo \(title)", symbol: "waveform")
+
+        case .transcript(let text, let translation, let final):
+            liveClass.update(text: text, translation: translation, final: final)
+
+        case .transcriptMark:
+            liveClass.mark()
+
+        case .transcriptEnd:
+            if let url = liveClass.end() {
+                hud.showMessage("clase guardada", symbol: "doc.text.fill")
+                reply(key, .status("guardada en Documentos › Zarcillo › Clases"))
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }
 

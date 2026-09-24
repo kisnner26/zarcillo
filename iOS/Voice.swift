@@ -1,0 +1,235 @@
+import FoundationModels
+import SwiftUI
+
+/// Órdenes en lenguaje natural: "abre Figma, baja el volumen a 30 y pon el
+/// modo clase". Se escucha y se entiende en el propio iPhone (el modelo de
+/// Apple Intelligence si está disponible, si no un intérprete de reglas) y se
+/// convierte en una escena de un solo uso.
+@MainActor
+final class VoiceCommander: ObservableObject {
+    enum Phase: Equatable { case idle, listening, thinking, done([String]), failed(String) }
+
+    @Published private(set) var phase: Phase = .idle
+    @Published private(set) var heard = ""
+    let speech = LiveSpeech()
+    private weak var remote: Remote?
+    private var text = ""
+
+    func attach(_ remote: Remote) { self.remote = remote }
+
+    func begin() {
+        text = ""
+        heard = ""
+        phase = .listening
+        speech.onPartial = { [weak self] t in self?.heard = (self?.text ?? "") + t }
+        speech.onFinal = { [weak self] t in
+            guard let self else { return }
+            self.text += (self.text.isEmpty ? "" : " ") + t
+            self.heard = self.text
+        }
+        Task { await speech.start(locale: "es-MX") }
+    }
+
+    func end() {
+        speech.stop()
+        let order = heard.trimmingCharacters(in: .whitespaces)
+        guard !order.isEmpty, let remote else {
+            phase = .idle
+            return
+        }
+        phase = .thinking
+        Task {
+            let steps = await plan(order, remote: remote)
+            if steps.isEmpty {
+                phase = .failed("no entendí “\(order)”")
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            } else {
+                remote.send(.runRoutine(Routine(name: "voz", symbol: "waveform", steps: steps)))
+                phase = .done(steps.map(\.label))
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            try? await Task.sleep(for: .seconds(2.5))
+            if case .listening = phase { return }
+            phase = .idle
+        }
+    }
+
+    // MARK: Entender
+
+    private func plan(_ order: String, remote: Remote) async -> [RoutineStep] {
+        if #available(iOS 26.0, *), SystemLanguageModel.default.isAvailable,
+           let steps = try? await planWithModel(order, remote: remote), !steps.isEmpty {
+            return steps
+        }
+        return planWithRules(order, remote: remote)
+    }
+
+    @available(iOS 26.0, *)
+    private func planWithModel(_ order: String, remote: Remote) async throws -> [RoutineStep] {
+        let apps = remote.apps.map(\.name).joined(separator: ", ")
+        let scenes = remote.routines.map(\.name).joined(separator: ", ")
+        let session = LanguageModelSession(instructions: """
+        Conviertes órdenes en español para controlar un Mac en una lista de pasos.
+        Apps disponibles: \(apps).
+        Escenas disponibles: \(scenes).
+        Usa solo esas apps y escenas. Niveles de volumen y brillo de 0 a 100.
+        """)
+        let response = try await session.respond(to: order, generating: VoicePlan.self)
+        return response.content.steps.flatMap { steps(from: $0, remote: remote) }
+    }
+
+    @available(iOS 26.0, *)
+    private func steps(from s: VoicePlan.Step, remote: Remote) -> [RoutineStep] {
+        if s.action == .scene {
+            // Una escena se expande en sus propios pasos.
+            guard let name = s.target,
+                  let r = remote.routines.first(where: { fold($0.name).contains(fold(name)) || fold(name).contains(fold($0.name)) })
+            else { return [] }
+            return r.steps
+        }
+        return step(from: s, remote: remote).map { [$0] } ?? []
+    }
+
+    @available(iOS 26.0, *)
+    private func step(from s: VoicePlan.Step, remote: Remote) -> RoutineStep? {
+        switch s.action {
+        case .openApp:
+            guard let name = s.target, let app = match(name, in: remote.apps) else { return nil }
+            return .openApp(id: app.id, name: app.name)
+        case .volume: return .volume(Double(min(100, max(0, s.level ?? 50))) / 100)
+        case .brightness: return .brightness(Double(min(100, max(0, s.level ?? 50))) / 100)
+        case .playPause: return .media(.playPause)
+        case .nextTrack: return .media(.next)
+        case .previousTrack: return .media(.previous)
+        case .lock: return .power(.lock)
+        case .sleep: return .power(.sleep)
+        case .displayOff: return .power(.displayOff)
+        case .missionControl: return .gesture(.missionControl)
+        case .spotlight: return .gesture(.spotlight)
+        case .openURL:
+            guard let t = s.target else { return nil }
+            return .openURL(t.contains("://") ? t : "https://" + t)
+        case .scene:
+            return nil
+        }
+    }
+
+    /// Sin modelo: frases separadas por "y" o comas, reconocidas por palabras clave.
+    private func planWithRules(_ order: String, remote: Remote) -> [RoutineStep] {
+        let parts = fold(order)
+            .replacingOccurrences(of: ", y ", with: ",")
+            .replacingOccurrences(of: " y luego ", with: ",")
+            .replacingOccurrences(of: " y ", with: ",")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        var steps: [RoutineStep] = []
+        for p in parts where !p.isEmpty {
+            let number = p.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }.first
+            if p.contains("volumen") {
+                let v = number ?? (p.contains("sube") ? Int(remote.volume * 100) + 20 : Int(remote.volume * 100) - 20)
+                steps.append(.volume(Double(min(100, max(0, v))) / 100))
+            } else if p.contains("brillo") {
+                steps.append(.brightness(Double(min(100, max(0, number ?? 50))) / 100))
+            } else if p.contains("pausa") || p.contains("reproduce") || p.contains("play") {
+                steps.append(.media(.playPause))
+            } else if p.contains("siguiente") {
+                steps.append(.media(.next))
+            } else if p.contains("anterior") {
+                steps.append(.media(.previous))
+            } else if p.contains("bloquea") {
+                steps.append(.power(.lock))
+            } else if p.contains("suspend") || p.contains("duerme") {
+                steps.append(.power(.sleep))
+            } else if p.contains("mission") {
+                steps.append(.gesture(.missionControl))
+            } else if p.contains("spotlight") || p.contains("busca") {
+                steps.append(.gesture(.spotlight))
+            } else if let r = remote.routines.first(where: { p.contains(fold($0.name)) }) {
+                steps += r.steps
+            } else if p.hasPrefix("abre") || p.hasPrefix("abrir") || p.hasPrefix("pon ") {
+                let name = p.replacingOccurrences(of: "abrir", with: "").replacingOccurrences(of: "abre", with: "")
+                    .replacingOccurrences(of: "pon ", with: "").trimmingCharacters(in: .whitespaces)
+                if let app = match(name, in: remote.apps) { steps.append(.openApp(id: app.id, name: app.name)) }
+            }
+        }
+        return steps
+    }
+
+    private func match(_ name: String, in apps: [AppTile]) -> AppTile? {
+        let n = fold(name)
+        return apps.first { fold($0.name) == n } ?? apps.first { fold($0.name).contains(n) || n.contains(fold($0.name)) }
+    }
+
+    private func fold(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+    }
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct VoicePlan {
+    @Generable
+    enum Action {
+        case openApp, volume, brightness, playPause, nextTrack, previousTrack
+        case lock, sleep, displayOff, missionControl, spotlight, openURL, scene
+    }
+
+    @Generable
+    struct Step {
+        @Guide(description: "Qué hacer en el Mac")
+        var action: Action
+        @Guide(description: "Nombre de la app, de la escena o la dirección web, si aplica")
+        var target: String?
+        @Guide(description: "Nivel de 0 a 100 para volumen o brillo")
+        var level: Int?
+    }
+
+    @Guide(description: "Los pasos en el orden en que se dijeron")
+    var steps: [Step]
+}
+
+/// Lo que se ve mientras hablas: lo escuchado y, al soltar, los pasos.
+struct VoiceOverlay: View {
+    @ObservedObject var voice: VoiceCommander
+
+    var body: some View {
+        Group {
+            switch voice.phase {
+            case .idle:
+                EmptyView()
+            case .listening:
+                card(symbol: "waveform", title: voice.heard.isEmpty ? "te escucho…" : voice.heard, lines: [])
+            case .thinking:
+                card(symbol: "sparkles", title: "entendiendo…", lines: [])
+            case .done(let steps):
+                card(symbol: "checkmark", title: "listo", lines: steps)
+            case .failed(let why):
+                card(symbol: "questionmark", title: why, lines: [])
+            }
+        }
+        .animation(.spring(duration: 0.4, bounce: 0.3), value: voice.phase)
+    }
+
+    private func card(symbol: String, title: String, lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Tone.onEmber)
+                    .symbolEffect(.variableColor.iterative, isActive: voice.phase == .listening)
+                    .frame(width: 40, height: 40).background(Circle().fill(Tone.ember))
+                Text(title).font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Tone.ink).lineLimit(3)
+            }
+            ForEach(lines, id: \.self) { l in
+                Label(l, systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Tone.ink.opacity(0.75))
+            }
+        }
+        .padding(Space.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Tone.key))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Tone.ember.opacity(0.4), lineWidth: 1))
+        .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
+        .padding(.horizontal, Space.m)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}

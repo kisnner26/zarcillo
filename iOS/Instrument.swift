@@ -50,11 +50,12 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case photos, send, scan, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
+    case classes, photos, send, scan, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
+        case .classes: "clases"
         case .photos: "fotos"
         case .send: "enviar"
         case .scan: "escanear"
@@ -72,6 +73,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
+        case .classes: "transcribe y traduce en vivo"
         case .photos: "tíralas al Mac como hojas"
         case .send: "archivos, links y texto al Mac"
         case .scan: "texto al cursor, pizarra a PDF"
@@ -89,6 +91,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .classes: "waveform"
         case .photos: "photo.on.rectangle.angled"
         case .send: "tray.and.arrow.up"
         case .scan: "doc.viewfinder"
@@ -128,6 +131,7 @@ struct Instrument: View {
     @EnvironmentObject private var remote: Remote
     @Environment(\.isLandscape) private var landscape
     @StateObject private var deck = Deck()
+    @StateObject private var voice = VoiceCommander()
 
     var body: some View {
         Group {
@@ -157,6 +161,9 @@ struct Instrument: View {
         // Los avisos del Mac: una notificación breve arriba, solo cuando hay algo que decir.
         .overlay(alignment: .top) { Toast() }
         .overlay { HarvestFall() }
+        .overlay(alignment: .top) { VoiceOverlay(voice: voice).padding(.top, Space.s) }
+        .onAppear { voice.attach(remote) }
+        .environmentObject(voice)
         .animation(.spring(duration: 0.45, bounce: 0.2), value: landscape && deck.mode == .screen)
         // La pantalla en vivo se pide desde aquí, según el modo y la orientación:
         // en horizontal, con el doble de resolución.
@@ -259,6 +266,7 @@ struct Stage: View {
 struct ControlDeck: View {
     @EnvironmentObject private var remote: Remote
     @EnvironmentObject private var deck: Deck
+    @EnvironmentObject private var voice: VoiceCommander
     /// Radio del anillo de modos y diámetro de la perilla.
     let ring: CGFloat
     let knob: CGFloat
@@ -268,7 +276,8 @@ struct ControlDeck: View {
         ZStack {
             OrbitRing(radius: ring)
             Knob(diameter: knob, value: knobValue, caption: caption,
-                 onTick: tick, onPress: press)
+                 onTick: tick, onPress: press,
+                 onHold: { holding in holding ? voice.begin() : voice.end() })
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -333,6 +342,11 @@ struct ControlDeck: View {
     }
 
     private func press() {
+        // Con una clase en marcha, la perilla marca el momento.
+        if remote.transcribing {
+            remote.markFromKnob()
+            return
+        }
         switch contextKnob {
         case .frames:
             remote.send(.key(name: "space"))
@@ -444,6 +458,10 @@ struct Knob: View {
     let caption: String
     let onTick: (Int) -> Bool
     let onPress: () -> Void
+    /// Mantener la perilla quieta medio segundo: hablarle.
+    var onHold: ((Bool) -> Void)? = nil
+    @State private var holding = false
+    @State private var holdTask: Task<Void, Never>?
 
     @State private var angle: Double = 0          // giro visual acumulado, en grados
     @State private var last: (angle: Double, time: TimeInterval)?
@@ -523,7 +541,18 @@ struct Knob: View {
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { v in
-                    if !pressed { spin?.cancel(); pressed = true }
+                    if !pressed {
+                        spin?.cancel()
+                        pressed = true
+                        holdTask?.cancel()
+                        holdTask = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(550))
+                            guard !Task.isCancelled, pressed, travel < 8 else { return }
+                            holding = true
+                            Detents.shared.wall()
+                            onHold?(true)
+                        }
+                    }
                     let c = CGPoint(x: base / 2, y: base / 2)
                     let a = atan2(v.location.y - c.y, v.location.x - c.x) * 180 / .pi
                     let now = v.time.timeIntervalSinceReferenceDate
@@ -541,7 +570,11 @@ struct Knob: View {
                 .onEnded { _ in
                     pressed = false
                     last = nil
-                    if travel < 8 {
+                    holdTask?.cancel()
+                    if holding {
+                        holding = false
+                        onHold?(false)
+                    } else if travel < 8 {
                         presses += 1
                         Detents.shared.press()
                         onPress()
@@ -967,6 +1000,7 @@ struct MoreStage: View {
                                               : "gira la perilla para cambiar el brillo")
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
+        case .classes: ClassesPage()
         case .photos: TossPage()
         case .send: SendPage()
         case .scan: ScanPage()

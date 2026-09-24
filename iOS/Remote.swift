@@ -86,6 +86,10 @@ final class Remote: ObservableObject {
     /// Lo último cosechado del Mac, para la animación de la hoja que cae.
     @Published private(set) var harvestImage: UIImage?
     @Published private(set) var harvests = 0
+    /// Hay una clase transcribiéndose: tocar la perilla marca el momento.
+    @Published var transcribing = false
+    @Published private(set) var knobMarks = 0
+    func markFromKnob() { knobMarks += 1 }
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
     private var pendingMove = CGVector.zero

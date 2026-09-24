@@ -30,8 +30,16 @@
 	<string>Zarcillo usa la cámara para leer texto y escanear pizarras o apuntes hacia tu Mac.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Zarcillo busca tu Mac en la red Wi-Fi para controlarlo.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Zarcillo escucha la clase para transcribirla en tu Mac, y tus órdenes de voz.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Zarcillo guarda en Fotos el póster de la canción que estás escuchando.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>La transcripción se hace en el propio iPhone, sin internet.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

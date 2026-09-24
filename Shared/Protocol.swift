@@ -256,6 +256,11 @@ enum Command: Codable {
     /// Una foto tirada con dirección: el ángulo del lanzamiento (radianes, 0 =
     /// hacia arriba) y de qué lado del iPhone está el Mac.
     case photoToss(data: Data, angle: Double, side: String)
+    // Clases transcritas: el iPhone escucha y el Mac muestra y guarda.
+    case transcriptStart(title: String, language: String)
+    case transcript(text: String, translation: String?, final: Bool)
+    case transcriptMark
+    case transcriptEnd
 }
 
 /// Mac → iPhone.
