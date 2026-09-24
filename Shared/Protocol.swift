@@ -331,6 +331,9 @@ enum Command: Codable {
     /// Enseñar por demostración: el Mac anota apps y atajos hasta `teachStop`.
     /// Modo privacidad: filtro antiespía por software en el Mac.
     case privacy(on: Bool, strength: Double, focus: Bool, onlookers: Bool)
+    /// Mando de juego: una tecla se mantiene pulsada hasta su `down: false`.
+    case gameKey(name: String, down: Bool)
+    case gameRelease
     case teachStart(name: String)
     case teachStop
     case teachCancel

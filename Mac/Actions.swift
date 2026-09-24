@@ -168,6 +168,26 @@ enum Input {
         }
     }
 
+    /// Teclas del mando que están pulsadas ahora mismo (solo desde la cola de entrada).
+    private static var held: Set<CGKeyCode> = []
+
+    /// Pulsa o suelta una tecla sin soltarla sola: los juegos leen si está abajo.
+    static func hold(_ name: String, down: Bool) {
+        guard let code = keyCodes[name.lowercased()] else { return }
+        if down { guard held.insert(code).inserted else { return } } else { guard held.remove(code) != nil else { return } }
+        let e = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
+        if (123...126).contains(code) { e?.flags = [.maskSecondaryFn, .maskNumericPad] }
+        e?.post(tap: .cghidEventTap)
+    }
+
+    /// Suelta todo: al cerrar el mando o si el iPhone se desconecta, ninguna tecla queda trabada.
+    static func releaseAll() {
+        for code in held {
+            CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)?.post(tap: .cghidEventTap)
+        }
+        held = []
+    }
+
     static func shortcut(_ s: Shortcut) -> Bool {
         guard let code = keyCodes[s.key.lowercased()] else { return false }
         var flags = CGEventFlags()
@@ -217,6 +237,7 @@ enum Input {
         "return": 36, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43,
         "/": 44, "n": 45, "m": 46, ".": 47, "tab": 48, "space": 49, "`": 50,
         "delete": 51, "escape": 53, "left": 123, "right": 124, "down": 125, "up": 126,
+        "shift": 56, "option": 58, "control": 59,
     ]
 }
 

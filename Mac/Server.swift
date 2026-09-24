@@ -253,6 +253,10 @@ final class Server: ObservableObject {
                 if Input.isTrusted { Input.queue.async { Input.click(button) } }
             case .press(let down):
                 if Input.isTrusted { Input.queue.async { Input.press(down: down) } }
+            case .gameKey(let name, let down):
+                if Input.isTrusted { Input.queue.async { Input.hold(name, down: down) } }
+            case .gameRelease:
+                Input.queue.async { Input.releaseAll() }
             case .tapScreen(let x, let y, let button):
                 if Input.isTrusted { Input.queue.async { ScreenGrabber.tap(x: x, y: y, button: button) } }
             default:
@@ -264,6 +268,7 @@ final class Server: ObservableObject {
 
     private func drop(_ key: ObjectIdentifier) {
         clients[key] = nil
+        Input.queue.async { Input.releaseAll() }
         devices = clients.values.map(\.name)
         watchers[key] = nil
         if watchers.isEmpty { detachTarget = nil }
@@ -609,6 +614,9 @@ final class Server: ObservableObject {
         case .privacy(let on, let strength, let focus, let onlookers):
             privacy.set(on: on, strength: strength, focus: focus, onlookers: onlookers)
             if on { hud.showMessage("modo privacidad", symbol: "eye.slash") }
+
+        case .gameKey, .gameRelease:
+            break  // van por la cola de entrada
 
         case .teachStart(let name):
             teacher.start(name: name)
