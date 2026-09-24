@@ -205,16 +205,7 @@ struct LiveScreen: View {
                         .offset(offset)
                         .transition(.opacity)
                     if let p = tapPoint {
-                        Circle().stroke(Tone.ember, lineWidth: 3)
-                            .frame(width: 44, height: 44)
-                            .position(p)
-                            .keyframeAnimator(initialValue: RippleState(), trigger: taps) { v, s in
-                                v.scaleEffect(s.scale).opacity(s.opacity)
-                            } keyframes: { _ in
-                                KeyframeTrack(\.scale) { LinearKeyframe(0.4, duration: 0.001); CubicKeyframe(1.6, duration: 0.45) }
-                                KeyframeTrack(\.opacity) { LinearKeyframe(1, duration: 0.001); CubicKeyframe(0, duration: 0.45) }
-                            }
-                            .allowsHitTesting(false)
+                        WaterRipple(point: p, trigger: taps)
                     }
                 } else {
                     placeholder

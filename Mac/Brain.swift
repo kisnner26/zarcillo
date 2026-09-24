@@ -177,7 +177,8 @@ final class Brain {
         BrainInfo(stats: stats,
                   intents: intents.sorted { $0.uses > $1.uses }.map {
                       BrainIntentInfo(id: $0.id, template: $0.display, uses: $0.uses, fixed: $0.fixed,
-                                      trusted: $0.trusted, steps: $0.steps.map(\.label))
+                                      trusted: $0.trusted, steps: $0.steps.map(\.label),
+                                      lastUsed: $0.lastUsed.timeIntervalSince1970)
                   },
                   claudeReady: claudeReady, claudeOn: claudeOn, claudePlan: claudePlan)
     }

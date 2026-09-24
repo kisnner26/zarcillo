@@ -74,6 +74,8 @@ struct BrainIntentInfo: Codable, Equatable, Identifiable {
     var fixed: Bool
     var trusted: Bool
     var steps: [String]
+    /// Segundos desde 1970 de su último uso; el jardín marchita lo que no usas.
+    var lastUsed: Double? = nil
 }
 
 struct BrainSuggestion: Codable, Equatable, Identifiable {
