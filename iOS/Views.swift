@@ -11,13 +11,16 @@ enum Tone {
     static let recess = Color(red: 0.07, green: 0.051, blue: 0.043)
     static let key = Color(red: 0.165, green: 0.125, blue: 0.11)
     static let stroke = Color(red: 0.23, green: 0.17, blue: 0.145)
-    /// La brasa: el naranja del icono.
-    static let ember = Color(red: 0.94, green: 0.54, blue: 0.29)
-    static let emberDeep = Color(red: 0.78, green: 0.39, blue: 0.17)
+    /// El acento que eligió el usuario (por defecto, el naranja del icono).
+    static var ember: Color { Theme.shared.accent }
+    /// El mismo acento, más hondo: estrías de la perilla y sombras.
+    static var emberDeep: Color { Theme.shared.accent.mix(with: .black, by: 0.28) }
+    /// Texto sobre el acento: oscuro si el acento es claro, crema si es oscuro.
+    static var onEmber: Color { Theme.shared.isLight ? body : ink }
     static let leaf = Color(red: 0.62, green: 0.85, blue: 0.62)
     // Nombres viejos, para los efectos que aún los usan.
-    static let peach = Color(red: 1.0, green: 0.80, blue: 0.64)
-    static let orange = ember
+    static var peach: Color { Theme.shared.accent.mix(with: .white, by: 0.45) }
+    static var orange: Color { ember }
 }
 
 /// La superficie del control: naranja cálido que brilla, como una lámpara.
@@ -261,7 +264,7 @@ struct ConnectView: View {
                     let next = i == chars.count && focused
                     Text(filled ? String(chars[i]) : "")
                         .font(.system(size: 28, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(filled ? Tone.onEmber : Tone.ink)
                         .contentTransition(.numericText())
                         .frame(width: 44, height: 56)
                         .background(RoundedRectangle(cornerRadius: 12).fill(filled ? Tone.ember : Tone.key))

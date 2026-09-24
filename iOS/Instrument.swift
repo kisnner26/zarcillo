@@ -48,12 +48,13 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case brightness, gestures, laser, power, routines, shortcuts
+    case brightness, color, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .brightness: "brillo"
+        case .color: "color"
         case .gestures: "gestos"
         case .laser: "láser"
         case .power: "energía"
@@ -65,6 +66,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .brightness: "gira la perilla"
+        case .color: "el acento de la app"
         case .gestures: "escritorios y Spotlight"
         case .laser: "apunta con el iPhone"
         case .power: "bloquear, suspender, despertar"
@@ -76,6 +78,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .brightness: "sun.max"
+        case .color: "paintpalette"
         case .gestures: "hand.draw"
         case .laser: "light.beacon.max"
         case .power: "power"
@@ -305,7 +308,7 @@ struct ControlDeck: View {
             guard !remote.apps.isEmpty else { return false }
             let next = deck.appIndex + step
             guard remote.apps.indices.contains(next) else { return false }
-            deck.appIndex = next
+            withAnimation(.snappy(duration: 0.3)) { deck.appIndex = next }
             return true
         case .screen:
             remote.send(.scroll(dx: 0, dy: Double(-step) * 36))
@@ -377,7 +380,7 @@ struct OrbitRing: View {
                                 .transition(.scale.combined(with: .opacity))
                         }
                     }
-                    .foregroundStyle(selected ? Tone.body : Tone.ink.opacity(0.7))
+                    .foregroundStyle(selected ? Tone.onEmber : Tone.ink.opacity(0.7))
                     .padding(.horizontal, selected ? 16 : 0)
                     .frame(minWidth: Space.tap, minHeight: Space.tap)
                     .background(Capsule().fill(selected ? Tone.ember : Tone.key))
@@ -597,37 +600,44 @@ struct Tendril: Shape {
 struct VineApps: View {
     @EnvironmentObject private var remote: Remote
     @EnvironmentObject private var deck: Deck
-    private let spacing: CGFloat = 104
+    /// Ancho de cada brote en el tallo.
+    private let cell: CGFloat = 104
 
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { geo in
                 let h = geo.size.height
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal) {
-                        ZStack(alignment: .topLeading) {
-                            Vine(count: remote.apps.count, spacing: spacing, height: h)
-                                .stroke(Tone.ink.opacity(0.28), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            ForEach(Array(remote.apps.enumerated()), id: \.element.id) { i, app in
-                                Bud(app: app, image: remote.icons[app.id], selected: i == deck.appIndex,
-                                    launches: i == deck.appIndex ? deck.launches : 0,
-                                    windows: remote.windows(of: app.id),
-                                    onWindow: { remote.send(.focusWindow(id: $0.id)); Haptic.thump() }) {
-                                    deck.appIndex = i
-                                    remote.launch(app)
-                                    deck.launches += 1
-                                }
-                                .position(Vine.point(i, spacing: spacing, height: h))
-                                .id(i)
+                ScrollView(.horizontal) {
+                    // Una fila real de celdas iguales: el desplazamiento sabe dónde
+                    // está cada brote y puede centrarlo exacto.
+                    LazyHStack(spacing: 0) {
+                        ForEach(Array(remote.apps.enumerated()), id: \.offset) { i, app in
+                            Bud(app: app, image: remote.icons[app.id], selected: i == deck.appIndex,
+                                launches: i == deck.appIndex ? deck.launches : 0,
+                                windows: remote.windows(of: app.id),
+                                onWindow: { remote.send(.focusWindow(id: $0.id)); Haptic.thump() }) {
+                                withAnimation(.snappy) { deck.appIndex = i }
+                                remote.launch(app)
+                                deck.launches += 1
                             }
+                            .frame(width: cell, height: h)
+                            .offset(y: Vine.lift(i, height: h))
+                            .id(i)
                         }
-                        .frame(width: CGFloat(max(remote.apps.count, 1)) * spacing + 60, height: h)
                     }
-                    .scrollIndicators(.hidden)
-                    .onChange(of: deck.appIndex) { _, i in
-                        withAnimation(.spring(duration: 0.45)) { proxy.scrollTo(i, anchor: .center) }
+                    .scrollTargetLayout()
+                    .background(alignment: .leading) {
+                        Vine(count: remote.apps.count, cell: cell, height: h)
+                            .stroke(Tone.ink.opacity(0.28), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .frame(width: CGFloat(remote.apps.count) * cell, height: h)
                     }
                 }
+                // Márgenes de medio escenario: el primer y el último brote también
+                // pueden quedar al centro.
+                .contentMargins(.horizontal, max(0, (geo.size.width - cell) / 2), for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
+                .scrollPosition(id: selection, anchor: .center)
+                .scrollIndicators(.hidden)
             }
             if remote.apps.isEmpty {
                 ProgressView().tint(Tone.ember).padding(.bottom, 40)
@@ -641,34 +651,53 @@ struct VineApps: View {
             }
         }
     }
+
+    /// Desplazar el tallo elige el brote que queda al centro, y la perilla
+    /// mueve el tallo: son la misma selección.
+    private var selection: Binding<Int?> {
+        Binding(
+            get: { remote.apps.isEmpty ? nil : deck.appIndex },
+            set: { new in
+                guard let new, new != deck.appIndex else { return }
+                deck.appIndex = new
+                Detents.shared.detent(speed: 0.3)
+            }
+        )
+    }
 }
 
-/// El tallo: una onda suave que pasa por cada brote.
+/// El tallo: una onda suave que pasa por el centro de cada brote.
 struct Vine: Shape {
     let count: Int
-    let spacing: CGFloat
+    let cell: CGFloat
     let height: CGFloat
 
-    static func point(_ i: Int, spacing: CGFloat, height: CGFloat) -> CGPoint {
-        let x = 60 + CGFloat(i) * spacing
-        let y = height / 2 + sin(CGFloat(i) * 1.1) * height * 0.18
-        return CGPoint(x: x, y: y)
+    /// Cuánto sube o baja el brote `i` respecto de la línea media.
+    static func lift(_ i: Int, height: CGFloat) -> CGFloat {
+        sin(CGFloat(i) * 1.1) * height * 0.16
+    }
+
+    private func point(_ i: Int) -> CGPoint {
+        CGPoint(x: cell / 2 + CGFloat(i) * cell, y: height / 2 + Vine.lift(i, height: height))
     }
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
         guard count > 0 else { return p }
-        p.move(to: CGPoint(x: 0, y: Vine.point(0, spacing: spacing, height: height).y + 30))
+        let first = point(0)
+        p.move(to: CGPoint(x: first.x - cell, y: first.y + 34))
+        var prev = p.currentPoint ?? first
         for i in 0..<count {
-            let pt = Vine.point(i, spacing: spacing, height: height)
-            let prev = i == 0 ? CGPoint(x: 0, y: pt.y + 30) : Vine.point(i - 1, spacing: spacing, height: height)
+            let pt = point(i)
             let midX = (prev.x + pt.x) / 2
             p.addCurve(to: pt, control1: CGPoint(x: midX, y: prev.y), control2: CGPoint(x: midX, y: pt.y))
+            prev = pt
         }
         // Remate en espiral, como la punta de un zarcillo.
-        let end = Vine.point(count - 1, spacing: spacing, height: height)
-        p.addQuadCurve(to: CGPoint(x: end.x + 40, y: end.y - 26), control: CGPoint(x: end.x + 36, y: end.y + 8))
-        p.addArc(center: CGPoint(x: end.x + 30, y: end.y - 26), radius: 10, startAngle: .degrees(0), endAngle: .degrees(300), clockwise: true)
+        let end = point(count - 1)
+        p.addQuadCurve(to: CGPoint(x: end.x + 44, y: end.y - 28), control: CGPoint(x: end.x + 40, y: end.y + 8))
+        p.addArc(center: CGPoint(x: end.x + 33, y: end.y - 28), radius: 11,
+                 startAngle: .degrees(0), endAngle: .degrees(300), clockwise: true)
         return p
     }
 }
@@ -1006,7 +1035,7 @@ struct MoreStage: View {
                                 Circle().fill(selected ? Tone.ember : Tone.key).frame(width: 44, height: 44)
                                     .overlay(Circle().stroke(Tone.stroke, lineWidth: selected ? 0 : 1))
                                 Image(systemName: item.symbol).font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(selected ? Tone.body : Tone.ink.opacity(0.75))
+                                    .foregroundStyle(selected ? Tone.onEmber : Tone.ink.opacity(0.75))
                             }
                             .frame(width: 44, height: 68)
                             VStack(alignment: .leading, spacing: 2) {
@@ -1037,11 +1066,60 @@ struct MoreStage: View {
                                               : "gira la perilla para cambiar el brillo")
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
+        case .color: ColorPage()
         case .gestures: GesturePage()
         case .laser: LaserPage()
         case .power: PowerPage()
         case .routines: NavigationStack { RoutineList().background(Tone.recess) }
         case .shortcuts: NavigationStack { ShortcutEditorPage().background(Tone.recess) }
+        }
+    }
+}
+
+// MARK: - Color
+
+/// Elegir el acento: una corola de pétalos, uno por color, y el tuyo propio al centro.
+struct ColorPage: View {
+    @State private var custom = Theme.shared.accent
+    @State private var picks = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height) - Space.l * 2
+            let presets = Theme.presets
+            ZStack {
+                ForEach(Array(presets.enumerated()), id: \.element.id) { i, p in
+                    let angle = Double(i) / Double(presets.count) * 2 * .pi - .pi / 2
+                    let selected = Theme.shared.hex == p.hex
+                    Button {
+                        Detents.shared.press()
+                        picks += 1
+                        withAnimation(.smooth(duration: 0.45)) { Theme.shared.set(hex: p.hex) }
+                        custom = Theme.color(p.hex)
+                    } label: {
+                        Ellipse()
+                            .fill(Theme.color(p.hex))
+                            .frame(width: side * 0.15, height: side * 0.30)
+                            .overlay(Ellipse().stroke(Tone.ink, lineWidth: selected ? 3 : 0))
+                            .scaleEffect(selected ? 1.12 : 1)
+                    }
+                    .buttonStyle(PressScale())
+                    .accessibilityLabel(p.name)
+                    .rotationEffect(.radians(angle + .pi / 2))
+                    .offset(x: cos(angle) * side * 0.33, y: sin(angle) * side * 0.33)
+                    .animation(.spring(duration: 0.4, bounce: 0.4), value: selected)
+                }
+                // Centro de la flor: el selector libre.
+                ZStack {
+                    Circle().fill(Tone.ember).frame(width: side * 0.3, height: side * 0.3)
+                        .boing(picks, amount: 0.1)
+                    ColorPicker("color propio", selection: $custom, supportsOpacity: false)
+                        .labelsHidden()
+                        .scaleEffect(1.5)
+                }
+                .onChange(of: custom) { _, c in Theme.shared.set(c) }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 }
