@@ -58,6 +58,17 @@ final class Remote: ObservableObject {
     @Published var shortcuts: [Shortcut] {
         didSet { UserDefaults.standard.set(try? JSONEncoder().encode(shortcuts), forKey: "shortcuts") }
     }
+    @Published var routines: [Routine] {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(routines), forKey: "routines") }
+    }
+
+    @Published private(set) var nowPlaying: NowPlaying?
+    /// Cuándo llegó `nowPlaying`: la barra de progreso avanza sola entre lecturas.
+    @Published private(set) var nowPlayingAt = Date()
+    @Published private(set) var artwork: UIImage?
+    @Published private(set) var frame: UIImage?
+    @Published private(set) var windows: [WindowInfo] = []
+    @Published private(set) var canCapture = true
 
     /// Mientras el dedo gira el dial, lo que el Mac informa no lo pisa.
     var editingLevel = false
@@ -75,6 +86,12 @@ final class Remote: ObservableObject {
             shortcuts = saved
         } else {
             shortcuts = Shortcut.defaults
+        }
+        if let data = UserDefaults.standard.data(forKey: "routines"),
+           let saved = try? JSONDecoder().decode([Routine].self, from: data) {
+            routines = saved
+        } else {
+            routines = Routine.defaults
         }
         browse()
     }
@@ -200,6 +217,7 @@ final class Remote: ObservableObject {
             connectTimeout?.cancel()
             codeError = nil
             phase = .connected(mac)
+            UserDefaults.standard.set(mac, forKey: "lastMac")
             send(.hello(device: UIDevice.current.name))
         case .waiting(let error), .failed(let error):
             if case .tls = error, case .connecting = phase { wrongCode(mac); return }
@@ -258,7 +276,84 @@ final class Remote: ObservableObject {
         case .status(let text):
             if text.contains("Accesibilidad") { canControl = false }
             flash(text)
+        case .machine(let hw, let ip):
+            UserDefaults.standard.set([hw ?? "", ip ?? ""], forKey: "machine::" + macName)
+        case .permissions(let accessibility, let screen):
+            canControl = accessibility
+            canCapture = screen
+        case .clipboard(let text, let image):
+            if let image, let img = UIImage(data: image) {
+                UIPasteboard.general.image = img
+                flash("imagen del Mac copiada")
+            } else if let text, !text.isEmpty {
+                UIPasteboard.general.string = text
+                flash("texto del Mac copiado")
+            } else {
+                flash("el portapapeles del Mac está vacío")
+            }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        case .nowPlaying(let np):
+            if np?.trackID != nowPlaying?.trackID { artwork = nil }
+            nowPlaying = np
+            nowPlayingAt = Date()
+        case .artwork(let id, let data):
+            if id == nowPlaying?.trackID { artwork = UIImage(data: data) }
+        case .frame(let data):
+            frame = UIImage(data: data)
+        case .windows(let list):
+            windows = list
         }
+    }
+
+    // MARK: Funciones
+
+    /// Copia el portapapeles del iPhone al Mac. Leerlo hace que iOS pregunte la
+    /// primera vez si Zarcillo puede pegar.
+    func pushClipboard() {
+        let pb = UIPasteboard.general
+        if pb.hasImages, let img = pb.image, let data = img.jpegData(compressionQuality: 0.85) {
+            send(.pushClipboard(text: nil, image: data))
+        } else if pb.hasStrings, let text = pb.string {
+            send(.pushClipboard(text: text, image: nil))
+        } else {
+            flash("el portapapeles del iPhone está vacío")
+        }
+    }
+
+    func windows(of appID: String) -> [WindowInfo] {
+        windows.filter { $0.appID == appID }
+    }
+
+    /// Posición estimada de la canción ahora mismo.
+    func position(at date: Date) -> Double {
+        guard let np = nowPlaying else { return 0 }
+        let elapsed = np.playing ? date.timeIntervalSince(nowPlayingAt) : 0
+        return min(np.duration, np.position + elapsed)
+    }
+
+    /// Despertar el Mac. macOS ya no deja que las apps lean su dirección física,
+    /// así que no hay paquete Wake-on-LAN posible: se vuelve a pedir su servicio
+    /// Bonjour, y el proxy de reposo (un HomePod o Apple TV en la misma red)
+    /// despierta al Mac para atenderlo. Si el Mac sí dio su dirección, se manda
+    /// además el paquete clásico por si la red lo deja pasar.
+    func wake() {
+        let name = macName.isEmpty ? (UserDefaults.standard.string(forKey: "lastMac") ?? "") : macName
+        if let info = UserDefaults.standard.stringArray(forKey: "machine::" + name), info.count == 2,
+           !info[0].isEmpty, !info[1].isEmpty {
+            let bytes = info[0].split(separator: ":").compactMap { UInt8($0, radix: 16) }
+            if bytes.count == 6 {
+                var packet = Data(repeating: 0xFF, count: 6)
+                for _ in 0..<16 { packet.append(contentsOf: bytes) }
+                let conn = NWConnection(host: NWEndpoint.Host(info[1]), port: 9, using: .udp)
+                conn.start(queue: .main)
+                for _ in 0..<3 { conn.send(content: packet, completion: .contentProcessed { _ in }) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { conn.cancel() }
+            }
+        }
+        flash("buscando \(name.isEmpty ? "tu Mac" : name)…")
+        channel?.cancel()
+        channel = nil
+        browse()
     }
 
     func send(_ command: Command) {

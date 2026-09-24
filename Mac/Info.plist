@@ -24,6 +24,8 @@
 	<string>public.app-category.utilities</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Zarcillo lee qué suena en Música o Spotify para mostrarlo en tu iPhone.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_zarcillo._tcp</string>

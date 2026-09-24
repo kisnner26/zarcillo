@@ -9,8 +9,20 @@ final class Server: ObservableObject {
     @Published private(set) var listening = false
     @Published private(set) var problem: String?
 
+    @Published private(set) var canCapture = ScreenGrabber.allowed
+
     let hud = HUD()
+    let laser = Laser()
     let macName = Host.current().localizedName ?? "Mac"
+
+    /// Clientes que están mirando la pantalla en vivo.
+    private var watchers: Set<ObjectIdentifier> = []
+    private var streaming: Task<Void, Never>?
+    /// AppleScript tarda decenas de ms: va en su propia cola para no frenar el puntero.
+    private let musicQueue = DispatchQueue(label: "zarcillo.music")
+    private var nowPlaying: NowPlaying?
+    private var artworkSent: String?
+    private var routineTask: Task<Void, Never>?
 
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: (channel: Channel, name: String)] = [:]
@@ -27,6 +39,9 @@ final class Server: ObservableObject {
 
         Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
+        }
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollMusic() }
         }
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
@@ -105,6 +120,9 @@ final class Server: ObservableObject {
     private func drop(_ key: ObjectIdentifier) {
         clients[key] = nil
         devices = clients.values.map(\.name)
+        watchers.remove(key)
+        if watchers.isEmpty { streaming?.cancel(); streaming = nil }
+        if clients.isEmpty { laser.setOn(false) }
     }
 
     private func reply(_ key: ObjectIdentifier, _ event: Event) {
@@ -124,6 +142,11 @@ final class Server: ObservableObject {
             devices = clients.values.map(\.name)
             reply(key, .welcome(mac: macName, volume: Volume.get(), brightness: Brightness.get(), canControl: Input.isTrusted))
             reply(key, .apps(Apps.dock()))
+            let m = Power.machine()
+            reply(key, .machine(hardwareAddress: m.hardware, ip: m.ip))
+            reply(key, .permissions(accessibility: Input.isTrusted, screen: ScreenGrabber.allowed))
+            reply(key, .nowPlaying(nowPlaying))
+            artworkSent = nil
             hud.showMessage("\(device) conectado", symbol: "iphone")
 
         case .listApps:
@@ -175,6 +198,133 @@ final class Server: ObservableObject {
                 hud.showMessage(shortcut.title, symbol: "command")
                 reply(key, .status(shortcut.title))
             }
+
+        case .type(let text):
+            guard allowed(key) else { return }
+            Typing.type(text)
+
+        case .key(let name):
+            guard allowed(key) else { return }
+            Typing.key(named: name)
+
+        case .pushClipboard(let text, let image):
+            Clipboard.set(text: text, image: image)
+            hud.showMessage(image != nil ? "imagen copiada" : "texto copiado", symbol: "doc.on.clipboard")
+            reply(key, .status("copiado en el Mac"))
+
+        case .pullClipboard:
+            let c = Clipboard.get()
+            reply(key, .clipboard(text: c.text, image: c.image))
+
+        case .seek(let seconds):
+            guard let np = nowPlaying else { return }
+            musicQueue.async { NowPlayingReader.seek(seconds, in: np) }
+
+        case .laser(let on):
+            laser.setOn(on)
+
+        case .laserMove(let dx, let dy):
+            laser.move(dx: dx, dy: dy)
+
+        case .screen(let on):
+            if on { watchers.insert(key) } else { watchers.remove(key) }
+            if !ScreenGrabber.allowed {
+                ScreenGrabber.requestAccess()
+                reply(key, .permissions(accessibility: Input.isTrusted, screen: false))
+            }
+            updateStreaming()
+
+        case .tapScreen(let x, let y, let button):
+            guard allowed(key) else { return }
+            ScreenGrabber.tap(x: x, y: y, button: button)
+
+        case .listWindows:
+            if Input.isTrusted { reply(key, .windows(Windows.list())) }
+
+        case .focusWindow(let id):
+            guard allowed(key) else { return }
+            if let title = Windows.focus(id) {
+                hud.showMessage(title, symbol: "macwindow")
+            }
+
+        case .runRoutine(let routine):
+            hud.showMessage(routine.name, symbol: routine.symbol)
+            reply(key, .status(routine.name))
+            run(routine)
+
+        case .power(let action):
+            Power.perform(action)
+        }
+    }
+
+    // MARK: Escenas
+
+    /// Los pasos van en orden con una pausa corta: abrir una app y bajar el
+    /// volumen al mismo tiempo a veces pierde el segundo paso.
+    private func run(_ routine: Routine) {
+        routineTask?.cancel()
+        routineTask = Task { @MainActor in
+            for step in routine.steps {
+                if Task.isCancelled { return }
+                switch step {
+                case .openApp(let id, _): _ = Apps.launch(id)
+                case .openURL(let s): if let url = URL(string: s) { NSWorkspace.shared.open(url) }
+                case .volume(let v): Volume.set(v)
+                case .brightness(let v): Brightness.set(v)
+                case .media(let m): if Input.isTrusted { Input.media(m) }
+                case .shortcut(let sc): if Input.isTrusted { _ = Input.shortcut(sc) }
+                case .runShortcut(let name): Power.runShortcut(name)
+                case .gesture(let g): if Input.isTrusted { Input.gesture(g) }
+                case .power(let p): Power.perform(p)
+                case .wait(let s): try? await Task.sleep(for: .seconds(s))
+                }
+                try? await Task.sleep(for: .milliseconds(350))
+            }
+        }
+    }
+
+    // MARK: Pantalla en vivo
+
+    private func updateStreaming() {
+        guard !watchers.isEmpty, ScreenGrabber.allowed else {
+            streaming?.cancel()
+            streaming = nil
+            return
+        }
+        guard streaming == nil else { return }
+        streaming = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, !self.watchers.isEmpty else { return }
+                if let frame = await ScreenGrabber.frame() {
+                    for key in self.watchers { self.reply(key, .frame(frame)) }
+                }
+                try? await Task.sleep(for: .milliseconds(180))
+            }
+        }
+    }
+
+    // MARK: Música
+
+    private func pollMusic() {
+        guard !clients.isEmpty else { return }
+        musicQueue.async { [weak self] in
+            let np = NowPlayingReader.read()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.nowPlaying = np
+                    self.broadcast(.nowPlaying(np))
+                    if let np, np.trackID != self.artworkSent {
+                        self.artworkSent = np.trackID
+                        self.musicQueue.async {
+                            guard let art = NowPlayingReader.artwork(for: np) else { return }
+                            DispatchQueue.main.async {
+                                MainActor.assumeIsolated { self.broadcast(.artwork(trackID: np.trackID, data: art)) }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -194,7 +344,13 @@ final class Server: ObservableObject {
     /// Si el volumen o el brillo cambian desde el propio Mac (teclas, Centro de
     /// control), el dial del iPhone se entera.
     private func tick() {
+        let wasCapture = canCapture
         canControl = Input.isTrusted
+        canCapture = ScreenGrabber.allowed
+        if canCapture != wasCapture {
+            broadcast(.permissions(accessibility: canControl, screen: canCapture))
+            updateStreaming()
+        }
         guard !clients.isEmpty, Date().timeIntervalSince(lastLevelEdit) > 1 else { return }
         let now = (Volume.get(), Brightness.get())
         func changed(_ a: Double?, _ b: Double?) -> Bool { abs((a ?? -1) - (b ?? -1)) > 0.01 }

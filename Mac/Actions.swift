@@ -129,6 +129,12 @@ enum Input {
         }
     }
 
+    /// Lleva el cursor a un punto exacto (para la pantalla en vivo).
+    static func warp(to p: CGPoint) {
+        CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)?
+            .post(tap: .cghidEventTap)
+    }
+
     static func press(down: Bool) {
         dragging = down
         CGEvent(mouseEventSource: source, mouseType: down ? .leftMouseDown : .leftMouseUp,

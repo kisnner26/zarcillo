@@ -50,6 +50,7 @@ targets:
         NSLocalNetworkUsageDescription: Zarcillo anuncia este Mac en la red Wi-Fi para que tu iPhone lo encuentre.
         NSBonjourServices: [_zarcillo._tcp]
         NSHumanReadableCopyright: © 2026 Kisnner Obando
+        NSAppleEventsUsageDescription: Zarcillo lee qué suena en Música o Spotify para mostrarlo en tu iPhone.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kisnner.zarcillo.mac

@@ -101,9 +101,10 @@ struct RootView: View {
                     ZStack {
                         switch page {
                         case 0: AppsPage()
-                        case 1: DialPage()
-                        case 2: GesturePage()
-                        default: PadPage()
+                        case 1: PadPage()
+                        case 2: MusicPage()
+                        case 3: ScreenPage()
+                        default: MorePage()
                         }
                     }
                     .id(page)
@@ -157,8 +158,8 @@ struct PageBar: View {
     @Binding var page: Int
     var vertical: Bool
     @Namespace private var selection
-    private let items = [("square.grid.2x2.fill", "apps"), ("dial.medium.fill", "dial"),
-                         ("hand.draw.fill", "gestos"), ("hand.point.up.left.fill", "pad")]
+    private let items = [("square.grid.2x2.fill", "apps"), ("hand.point.up.left.fill", "pad"),
+                         ("music.note", "música"), ("display", "pantalla"), ("ellipsis.circle.fill", "más")]
 
     var body: some View {
         let layout = vertical ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
@@ -342,25 +343,35 @@ struct AppsPage: View {
 
     var body: some View {
         ScrollView {
+            RoutineStrip().padding(.top, landscape ? 36 : 50)
             if remote.apps.isEmpty {
-                ProgressView().tint(Tone.ink).padding(.top, 140)
+                ProgressView().tint(Tone.ink).padding(.top, 100)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: landscape ? 70 : 74), spacing: 16)],
                       spacing: landscape ? 16 : 22) {
                 ForEach(Array(remote.apps.enumerated()), id: \.element.id) { i, app in
                     AppIconButton(app: app, image: remote.icons[app.id], index: i,
-                                  side: landscape ? 62 : 70, appeared: appeared) {
+                                  side: landscape ? 62 : 70, appeared: appeared,
+                                  windows: remote.windows(of: app.id),
+                                  onWindow: { remote.send(.focusWindow(id: $0.id)); Haptic.thump() }) {
                         remote.launch(app)
                     }
                 }
             }
-            .padding(.horizontal, 20).padding(.top, landscape ? 44 : 60).padding(.bottom, 16)
+            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
         .refreshable { remote.send(.listApps) }
         // La cascada arranca cuando hay iconos que mostrar, no al abrir la pantalla vacía.
         .onAppear { if !remote.apps.isEmpty { appeared = true } }
         .onChange(of: remote.apps.isEmpty) { _, empty in if !empty { appeared = true } }
+        // Las ventanas cambian seguido: se piden al entrar y cada pocos segundos.
+        .task {
+            while !Task.isCancelled {
+                remote.send(.listWindows)
+                try? await Task.sleep(for: .seconds(4))
+            }
+        }
     }
 }
 
@@ -371,6 +382,8 @@ struct AppIconButton: View {
     let index: Int
     let side: CGFloat
     let appeared: Bool
+    var windows: [WindowInfo] = []
+    var onWindow: (WindowInfo) -> Void = { _ in }
     let action: () -> Void
     @State private var taps = 0
 
@@ -400,6 +413,20 @@ struct AppIconButton: View {
         }
         .buttonStyle(PressScale())
         .accessibilityLabel(app.name)
+        // Mantener pulsado muestra sus ventanas para saltar a una en concreto.
+        .contextMenu {
+            Section(app.name) {
+                if windows.isEmpty {
+                    Text(app.running ? "sin ventanas abiertas" : "no está abierta")
+                }
+                ForEach(windows) { w in
+                    Button { onWindow(w) } label: {
+                        Label(w.title, systemImage: w.minimized ? "arrow.up.right.square" : "macwindow")
+                    }
+                }
+                Button { action() } label: { Label("Abrir o traer al frente", systemImage: "arrow.up.forward.app") }
+            }
+        }
         .scaleEffect(appeared ? 1 : 0.3)
         .opacity(appeared ? 1 : 0)
         .rotationEffect(.degrees(appeared ? 0 : -12))
@@ -685,6 +712,8 @@ struct PadPage: View {
     @State private var editing = false
     @State private var mediaTaps: [MediaKey: Int] = [:]
     @State private var chipTaps: [UUID: Int] = [:]
+    @State private var typing = false
+    @State private var clipTaps = [0, 0]
 
     var body: some View {
         Group {
@@ -696,7 +725,7 @@ struct PadPage: View {
                         clickRow
                     }
                     VStack(spacing: 12) {
-                        HStack(spacing: 10) { mediaButtons }
+                        HStack(spacing: 8) { tools }
                         ScrollView {
                             VStack(spacing: 8) { shortcutChips }
                         }
@@ -710,7 +739,7 @@ struct PadPage: View {
                 VStack(spacing: 14) {
                     surface.padding(.top, 52)
                     clickRow
-                    HStack(spacing: 18) { mediaButtons }
+                    HStack(spacing: 12) { tools }
                     ScrollView(.horizontal) {
                         HStack(spacing: 8) { shortcutChips }.padding(.horizontal, 2)
                     }
@@ -721,6 +750,37 @@ struct PadPage: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .sheet(isPresented: $editing) { ShortcutEditor().environmentObject(remote) }
+        .overlay(alignment: .bottom) {
+            if typing {
+                KeyboardBar(shown: $typing)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+    }
+
+    /// Teclado remoto y portapapeles en los dos sentidos.
+    @ViewBuilder private var tools: some View {
+        tool("keyboard", "teclado", 0) { withAnimation(.spring(duration: 0.4, bounce: 0.25)) { typing = true } }
+        tool("arrow.up.doc.on.clipboard", "al Mac", 1) { remote.pushClipboard() }
+        tool("arrow.down.doc.on.clipboard", "del Mac", 2) { remote.send(.pullClipboard) }
+    }
+
+    private func tool(_ symbol: String, _ title: String, _ i: Int, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptic.tap()
+            if i > 0 { clipTaps[i - 1] += 1 }
+            action()
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
+                    .symbolEffect(.bounce, value: i > 0 ? clipTaps[i - 1] : 0)
+                Text(title).font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity).frame(height: 54)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.black.opacity(0.85)))
+        }
+        .buttonStyle(PressScale())
     }
 
     private var surface: some View {

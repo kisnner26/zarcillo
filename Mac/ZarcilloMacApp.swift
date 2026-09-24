@@ -53,6 +53,16 @@ struct MenuView: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.1)))
             }
 
+            if !server.canCapture {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Pantalla en vivo desactivada", systemImage: "rectangle.dashed")
+                        .font(.callout.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("Para ver el Mac en el iPhone, Zarcillo necesita el permiso de Grabación de pantalla.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Dar permiso…") { ScreenGrabber.requestAccess() }
+                }
+            }
+
             if let problem = server.problem {
                 Text(problem).font(.caption).foregroundStyle(.red)
             }
