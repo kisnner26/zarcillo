@@ -141,8 +141,14 @@ struct RootView: View {
     @State private var inside = false
     /// Se acaba de escribir el código: toca la celebración completa.
     @State private var pairedNow = false
+    @AppStorage("app.orientation") private var orientation: AppOrientation = .auto
 
     var body: some View {
+        ForceLandscape(enabled: orientation == .landscape) { root }
+            .background(Tone.body.ignoresSafeArea())
+    }
+
+    private var root: some View {
         ZStack {
             Glow()
             if inside {

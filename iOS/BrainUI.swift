@@ -85,7 +85,7 @@ struct BrainOverlay: View {
                 }
                 Spacer(minLength: 0)
                 Button { remote.dismissBrain() } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.4))
+                    GlyphView(.close, size: 15).foregroundStyle(Tone.ink.opacity(0.4))
                         .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("cerrar")

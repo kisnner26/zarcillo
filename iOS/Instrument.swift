@@ -37,6 +37,17 @@ enum DeckMode: Int, CaseIterable, Identifiable {
         }
     }
 
+    var glyph: Glyph {
+        switch self {
+        case .pad: .pad
+        case .deck: .deck
+        case .apps: .apps
+        case .music: .music
+        case .screen: .screen
+        case .more: .more
+        }
+    }
+
     var symbol: String {
         switch self {
         case .pad: "hand.point.up.left"
@@ -347,7 +358,7 @@ struct LandscapeScreen: View {
                 Haptic.tap()
                 exit()
             } label: {
-                Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
+                GlyphView(.close, size: 16)
                     .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(.black.opacity(0.45)))
@@ -547,7 +558,7 @@ struct OrbitRing: View {
                 let selected = m == deck.mode
                 Button { select(m) } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: m.symbol).font(.system(size: 16, weight: .semibold))
+                        GlyphView(m.glyph, size: 19)
                         if selected {
                             Text(m.label).font(.system(size: 14, weight: .bold, design: .rounded))
                                 .transition(.scale.combined(with: .opacity))
@@ -1076,8 +1087,7 @@ struct MoreStage: View {
             Haptic.tap()
             withAnimation(.spring(duration: 0.4)) { deck.moreOpen = nil }
         } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 15, weight: .bold))
+            GlyphView(.back, size: 17)
                 .foregroundStyle(Tone.ink.opacity(0.85))
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(Tone.key))

@@ -44,7 +44,7 @@ struct ScreenPage: View {
                         Detents.shared.press()
                         withAnimation(.spring(duration: 0.3)) { harvesting.toggle() }
                     } label: {
-                        Label(harvesting ? "encierra una zona" : "cosechar", systemImage: "leaf.fill")
+                        Label { Text(harvesting ? "encierra una zona" : "cosechar") } icon: { GlyphView(.harvest, size: 17) }
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundStyle(harvesting ? Tone.onEmber : Tone.ink)
                             .padding(.horizontal, 14).frame(height: Space.tap)
@@ -60,8 +60,7 @@ struct ScreenPage: View {
                         Detents.shared.press()
                         full = true
                     } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 16, weight: .bold))
+                        GlyphView(.expand, size: 20)
                             .foregroundStyle(Tone.onEmber)
                             .frame(width: Space.tap, height: Space.tap)
                             .background(Circle().fill(Tone.ember))
@@ -89,6 +88,12 @@ struct FullScreenMac: View {
     @State private var harvesting = false
 
     var body: some View {
+        // Horizontal aunque el sistema no gire (giro bloqueado o Duplicación del iPhone).
+        ForceLandscape { screen }
+            .background(Color.black.ignoresSafeArea())
+    }
+
+    private var screen: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             LiveScreen(zoomable: true, zoomOut: $zoom, harvesting: $harvesting)
@@ -99,7 +104,7 @@ struct FullScreenMac: View {
                 Detents.shared.press()
                 withAnimation(.spring(duration: 0.3)) { harvesting.toggle() }
             } label: {
-                Label(harvesting ? "encierra una zona" : "cosechar", systemImage: "leaf.fill")
+                Label { Text(harvesting ? "encierra una zona" : "cosechar") } icon: { GlyphView(.harvest, size: 17) }
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(harvesting ? Tone.onEmber : .white)
                     .padding(.horizontal, 14).frame(height: 44)
@@ -115,7 +120,7 @@ struct FullScreenMac: View {
                     Detents.shared.press()
                     dismiss()
                 } label: {
-                    Image(systemName: "xmark").font(.system(size: 15, weight: .bold))
+                    GlyphView(.close, size: 18)
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                         .background(Circle().fill(.black.opacity(0.55)))
@@ -431,6 +436,25 @@ final class OrientationDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
+/// Si el sistema no gira la pantalla (giro bloqueado, Duplicación del iPhone),
+/// el contenido se gira él mismo 90°: horizontal pase lo que pase.
+struct ForceLandscape<Content: View>: View {
+    var enabled = true
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        GeometryReader { g in
+            let turn = enabled && g.size.height > g.size.width
+            content()
+                .transformEnvironment(\.verticalSizeClass) { if turn { $0 = .compact } }
+                .frame(width: turn ? g.size.height : g.size.width, height: turn ? g.size.width : g.size.height)
+                .rotationEffect(.degrees(turn ? 90 : 0))
+                .position(x: g.size.width / 2, y: g.size.height / 2)
+        }
+        .ignoresSafeArea()
+    }
+}
+
 enum Orientation {
     /// Pide estas orientaciones. `.allButUpsideDown` significa "lo que eligió el
     /// usuario": así, al salir del mando o de la pantalla completa, se vuelve a su preferencia.
@@ -438,7 +462,11 @@ enum Orientation {
         let wanted = mask == .allButUpsideDown ? AppOrientation.current.mask : mask
         OrientationDelegate.mask = wanted
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        var vc = scene.windows.first?.rootViewController
+        while let v = vc {
+            v.setNeedsUpdateOfSupportedInterfaceOrientations()
+            vc = v.presentedViewController
+        }
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: wanted)) { _ in }
     }
 

@@ -128,6 +128,11 @@ struct GameController: View {
     @StateObject private var keys = GameKeys()
 
     var body: some View {
+        ForceLandscape { pad }
+            .background(Tone.body.ignoresSafeArea())
+    }
+
+    private var pad: some View {
         GeometryReader { geo in
             ZStack {
                 background
@@ -181,7 +186,7 @@ struct GameController: View {
                 Detents.shared.press()
                 dismiss()
             } label: {
-                Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.8))
+                GlyphView(.close, size: 17).foregroundStyle(Tone.ink.opacity(0.8))
                     .frame(width: 44, height: 44).background(Circle().fill(Tone.key))
                     .overlay(Circle().stroke(Tone.stroke, lineWidth: 1))
             }

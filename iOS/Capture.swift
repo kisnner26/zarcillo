@@ -68,7 +68,7 @@ struct ScanPage: View {
 
     private func closeButton(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+            GlyphView(.close, size: 18).foregroundStyle(.white)
                 .frame(width: 44, height: 44).background(Circle().fill(.black.opacity(0.55)))
         }
         .padding(Space.l)

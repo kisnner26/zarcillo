@@ -258,7 +258,9 @@ final class ScreenStream: NSObject, SCStreamOutput {
                 cfg.height = min(2400, Int(Double(width) * w.frame.height / max(w.frame.width, 1)))
                 cfg.showsCursor = false
             } else {
-                filter = SCContentFilter(display: display, excludingWindows: [])
+                // La Duplicación del iPhone muestra al propio iPhone: capturarla haría un espejo infinito.
+                let mirrors = content.windows.filter { $0.owningApplication?.bundleIdentifier == "com.apple.ScreenContinuity" }
+                filter = SCContentFilter(display: display, excludingWindows: mirrors)
                 cfg.width = width
                 cfg.height = Int(Double(width) * Double(display.height) / Double(max(display.width, 1)))
             }
