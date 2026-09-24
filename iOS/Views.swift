@@ -136,17 +136,38 @@ extension EnvironmentValues {
 
 struct RootView: View {
     @EnvironmentObject private var remote: Remote
+    /// El instrumento se muestra un momento después de conectar: primero la
+    /// enredadera se agarra al Mac y luego se entra, como si se abriera su pantalla.
+    @State private var inside = false
+    /// Se acaba de escribir el código: toca la celebración completa.
+    @State private var pairedNow = false
+
     var body: some View {
         ZStack {
             Glow()
-            if case .connected = remote.phase {
+            if inside {
                 Instrument()
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
             } else {
-                ConnectView()
-                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                ConnectView(onCode: { pairedNow = true })
+                    .transition(.opacity.combined(with: .scale(scale: 1.25)))
             }
         }
-        .animation(.spring(duration: 0.5, bounce: 0.25), value: remote.phase)
+        .onAppear { if case .connected = remote.phase { inside = true } }
+        .onChange(of: remote.phase) { _, phase in
+            guard case .connected = phase else {
+                if inside { withAnimation(.spring(duration: 0.5)) { inside = false } }
+                return
+            }
+            // Al reconectar solo (volver a la app), casi sin espera; tras el código, la escena entera.
+            let hold = pairedNow ? 1.9 : 0.5
+            pairedNow = false
+            Task {
+                try? await Task.sleep(for: .seconds(hold))
+                guard case .connected = remote.phase else { return }
+                withAnimation(.spring(duration: 0.7, bounce: 0.15)) { inside = true }
+            }
+        }
     }
 }
 

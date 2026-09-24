@@ -247,6 +247,8 @@ struct VineScene: View {
 
 struct ConnectView: View {
     @EnvironmentObject private var remote: Remote
+    var onCode: () -> Void = {}
+    @State private var sending = false
     @Environment(\.isLandscape) private var landscape
     @State private var code = ""
     @State private var shakes = 0
@@ -256,7 +258,7 @@ struct ConnectView: View {
         switch remote.phase {
         case .searching: .searching
         case .choosing: .choosing
-        case .needsCode: .code
+        case .needsCode: sending ? .connecting : .code
         case .connecting, .connected: .connecting
         }
     }
@@ -305,6 +307,8 @@ struct ConnectView: View {
         .onAppear { if case .needsCode = remote.phase { focused = true } }
         .onChange(of: remote.codeError) { _, e in
             if e != nil {
+                code = ""
+                focused = true
                 shakes += 1
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             }
@@ -366,8 +370,19 @@ struct ConnectView: View {
                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(red: 0.98, green: 0.55, blue: 0.45))
                     .multilineTextAlignment(.center)
             }
-        case .connecting(let mac), .connected(let mac):
+        case .connecting(let mac):
             status("Conectando", detail: mac, spinning: true)
+        case .connected(let mac):
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(Tone.ember)
+                    .symbolEffect(.bounce, value: mac)
+                    .transition(.scale.combined(with: .opacity))
+                Text("Conectado").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                Text(mac).font(.system(size: 14)).foregroundStyle(Tone.ink.opacity(0.62)).multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .onAppear { UINotificationFeedbackGenerator().notificationOccurred(.success) }
         }
     }
 
@@ -439,7 +454,18 @@ struct ConnectView: View {
                 .onChange(of: code) { _, new in
                     let digits = String(new.filter(\.isNumber).prefix(6))
                     if digits != new { code = digits }
-                    if digits.count == 6 { remote.submit(code: digits) }
+                    if digits.count == 6, !sending {
+                        // Primero se va el teclado; cuando ya bajó, se envía el código.
+                        sending = true
+                        focused = false
+                        onCode()
+                        Haptic.tap()
+                        Task {
+                            try? await Task.sleep(for: .seconds(0.38))
+                            remote.submit(code: digits)
+                            sending = false
+                        }
+                    }
                 }
             HStack(spacing: 8) {
                 ForEach(0..<6, id: \.self) { i in
