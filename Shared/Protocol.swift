@@ -245,6 +245,17 @@ enum Command: Codable {
     case lightsBrightness(Double)
     case lightZone(id: String, zone: LightZone)
     case lightIdentify(id: String)
+    /// Cosechar: recortar una zona de la pantalla (coordenadas 0…1) y traerla al iPhone.
+    case harvest(x: Double, y: Double, w: Double, h: Double)
+    /// Páginas escaneadas (pizarra, proyector, apuntes), ya enderezadas.
+    case scanPages([Data])
+    /// Cualquier archivo, para el bolsillo del Mac.
+    case file(name: String, data: Data)
+    /// Un link que se abre en el Mac.
+    case openURL(String)
+    /// Una foto tirada con dirección: el ángulo del lanzamiento (radianes, 0 =
+    /// hacia arriba) y de qué lado del iPhone está el Mac.
+    case photoToss(data: Data, angle: Double, side: String)
 }
 
 /// Mac → iPhone.
@@ -265,6 +276,8 @@ enum Event: Codable {
     case lights(devices: [LightInfo], ambient: Bool, brightness: Double)
     /// La app que está al frente en el Mac: la perilla y el Stream Deck se adaptan a ella.
     case frontApp(id: String, name: String)
+    /// Lo cosechado, en PNG.
+    case harvested(Data)
 }
 
 /// Qué parte de la pantalla sigue cada foco.

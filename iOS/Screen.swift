@@ -7,10 +7,27 @@ import UIKit
 struct ScreenPage: View {
     @EnvironmentObject private var remote: Remote
     @State private var full = false
+    @State private var harvesting = false
 
     var body: some View {
-        LiveScreen(zoomable: false)
+        LiveScreen(zoomable: false, harvesting: $harvesting)
             .padding(10)
+            .overlay(alignment: .bottomLeading) {
+                if remote.frame != nil {
+                    Button {
+                        Detents.shared.press()
+                        withAnimation(.spring(duration: 0.3)) { harvesting.toggle() }
+                    } label: {
+                        Label(harvesting ? "encierra una zona" : "cosechar", systemImage: "leaf.fill")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(harvesting ? Tone.onEmber : Tone.ink)
+                            .padding(.horizontal, 14).frame(height: Space.tap)
+                            .background(Capsule().fill(harvesting ? Tone.ember : Tone.key.opacity(0.9)))
+                    }
+                    .buttonStyle(PressScale())
+                    .padding(Space.l)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 if remote.frame != nil {
                     Button {
@@ -113,6 +130,9 @@ struct LiveScreen: View {
     @EnvironmentObject private var remote: Remote
     var zoomable: Bool
     var zoomOut: Binding<CGFloat>? = nil
+    /// Modo cosechar: el dedo encierra una zona en vez de hacer clic.
+    var harvesting: Binding<Bool>? = nil
+    @State private var lasso: CGRect?
 
     @State private var scale: CGFloat = 1
     @State private var base: CGFloat = 1
@@ -151,7 +171,19 @@ struct LiveScreen: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .overlay {
+                if let r = lasso {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Tone.ember.opacity(0.15))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Tone.ember, style: StrokeStyle(lineWidth: 2, dash: [6, 5])))
+                        .frame(width: r.width, height: r.height)
+                        .position(x: r.midX, y: r.midY)
+                        .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
+            .highPriorityGesture(harvestGesture(geo.size), including: harvesting?.wrappedValue == true ? .all : .none)
             .onTapGesture(coordinateSpace: .local) { p in click(p, geo.size, .left) }
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.5)
@@ -166,6 +198,34 @@ struct LiveScreen: View {
                 if z == 1, scale != 1 { withAnimation(.spring(duration: 0.4)) { reset() } }
             }
         }
+    }
+
+    /// Encerrar una zona: se dibuja el rectángulo y al soltar se pide al Mac.
+    private func harvestGesture(_ box: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { v in
+                lasso = CGRect(x: min(v.startLocation.x, v.location.x), y: min(v.startLocation.y, v.location.y),
+                               width: abs(v.location.x - v.startLocation.x), height: abs(v.location.y - v.startLocation.y))
+            }
+            .onEnded { _ in
+                defer {
+                    withAnimation(.easeOut(duration: 0.3)) { lasso = nil }
+                    harvesting?.wrappedValue = false
+                }
+                guard let r = lasso, r.width > 12, r.height > 12, let a = normalized(r.origin, box),
+                      let b = normalized(CGPoint(x: r.maxX, y: r.maxY), box, clamp: true) else { return }
+                Detents.shared.press()
+                remote.send(.harvest(x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y))
+            }
+    }
+
+    /// Punto de la vista → punto 0…1 de la pantalla del Mac.
+    private func normalized(_ p: CGPoint, _ box: CGSize, clamp: Bool = true) -> CGPoint? {
+        guard let img = remote.frame else { return nil }
+        let fit = fitted(img.size, in: box)
+        let x = ((p.x - box.width / 2 - offset.width) / scale) / fit.width + 0.5
+        let y = ((p.y - box.height / 2 - offset.height) / scale) / fit.height + 0.5
+        return CGPoint(x: min(1, max(0, x)), y: min(1, max(0, y)))
     }
 
     private var zoomGesture: some Gesture {

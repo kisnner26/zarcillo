@@ -402,3 +402,72 @@ enum Power {
         return (hardware, ip)
     }
 }
+
+// MARK: - Cosechar
+
+extension ScreenGrabber {
+    /// Un recorte de la pantalla principal en resolución completa. Las
+    /// coordenadas vienen de 0 a 1 sobre la imagen que ve el iPhone.
+    static func region(x: Double, y: Double, w: Double, h: Double) async -> Data? {
+        guard allowed else { return nil }
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first
+            else { return nil }
+            let dw = Double(display.width), dh = Double(display.height)
+            let rect = CGRect(x: x * dw, y: y * dh, width: max(4, w * dw), height: max(4, h * dh))
+            let scale = Double(NSScreen.main?.backingScaleFactor ?? 2)
+            let cfg = SCStreamConfiguration()
+            cfg.sourceRect = rect
+            cfg.width = Int(rect.width * scale)
+            cfg.height = Int(rect.height * scale)
+            cfg.showsCursor = false
+            let image = try await SCScreenshotManager.captureImage(
+                contentFilter: SCContentFilter(display: display, excludingWindows: []), configuration: cfg)
+            return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        } catch {
+            return nil
+        }
+    }
+}
+
+// MARK: - Apuntes escaneados
+
+import PDFKit
+import Vision
+
+/// Guarda páginas escaneadas (pizarra, proyector, cuaderno) como un PDF por
+/// escaneo, en Documentos › Zarcillo › Apuntes › fecha, con el texto
+/// reconocido al lado para que Spotlight lo encuentre.
+enum NotesArchive {
+    static func save(_ pages: [Data]) -> URL? {
+        let images = pages.compactMap { NSImage(data: $0) }
+        guard !images.isEmpty else { return nil }
+        let day = DateFormatter(), hour = DateFormatter()
+        day.dateFormat = "yyyy-MM-dd"
+        hour.dateFormat = "HH.mm"
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("Zarcillo/Apuntes/\(day.string(from: Date()))", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("apuntes \(hour.string(from: Date())).pdf")
+
+        let pdf = PDFDocument()
+        for (i, img) in images.enumerated() {
+            if let page = PDFPage(image: img) { pdf.insert(page, at: i) }
+        }
+        pdf.write(to: url)
+
+        // Texto reconocido, en un .txt al lado: Spotlight lo indexa.
+        var text = ""
+        for (i, data) in pages.enumerated() {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["es-ES", "en-US"]
+            try? VNImageRequestHandler(data: data).perform([request])
+            let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            text += "— página \(i + 1) —\n" + lines.joined(separator: "\n") + "\n\n"
+        }
+        try? text.write(to: url.deletingPathExtension().appendingPathExtension("txt"), atomically: true, encoding: .utf8)
+        return url
+    }
+}

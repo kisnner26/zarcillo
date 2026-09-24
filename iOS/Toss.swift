@@ -13,6 +13,8 @@ struct TossPage: View {
     @State private var drag: CGSize = .zero
     @State private var loading = false
     @State private var sent = 0
+    /// De qué lado del iPhone está el Mac: por ahí entra la hoja en la pantalla.
+    @AppStorage("macSide") private var macSide = "top"
 
     struct Leaf: Identifiable {
         let id = UUID()
@@ -115,6 +117,22 @@ struct TossPage: View {
     }
 
     private var controls: some View {
+        VStack(spacing: Space.s) {
+            // Por dónde entra la hoja en el Mac: el lado donde lo tienes.
+            HStack(spacing: 6) {
+                Text("el Mac está").font(.system(size: 12, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.5))
+                ForEach([("left", "a la izquierda"), ("top", "enfrente"), ("right", "a la derecha")], id: \.0) { id, title in
+                    Button {
+                        Haptic.tap()
+                        macSide = id
+                    } label: {
+                        Text(title).font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(macSide == id ? Tone.onEmber : Tone.ink.opacity(0.7))
+                            .padding(.horizontal, 10).frame(height: 36)
+                            .background(Capsule().fill(macSide == id ? Tone.ember : Tone.key))
+                    }
+                }
+            }
         HStack(spacing: Space.s + 2) {
             PhotosPicker(selection: $picks, maxSelectionCount: 30, matching: .images) {
                 Label("más", systemImage: "plus")
@@ -139,6 +157,7 @@ struct TossPage: View {
             }
             .buttonStyle(PressScale())
             .disabled(stack.isEmpty)
+        }
         }
     }
 
@@ -171,7 +190,9 @@ struct TossPage: View {
     private func toss(from offset: CGSize) {
         guard let leaf = stack.first else { return }
         Detents.shared.press()
-        remote.send(.photo(leaf.data))
+        // El ángulo del lanzamiento: 0 = recto hacia arriba.
+        let angle = atan2(Double(offset.width), -Double(min(offset.height, -1)))
+        remote.send(.photoToss(data: leaf.data, angle: angle, side: macSide))
         sent += 1
         flights.append(Flight(preview: leaf.preview, start: Date(), spin: offset.width >= 0 ? 1 : -1, from: offset))
         withAnimation(.spring(duration: 0.4, bounce: 0.3)) {

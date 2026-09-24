@@ -50,12 +50,14 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case photos, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
+    case photos, send, scan, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .photos: "fotos"
+        case .send: "enviar"
+        case .scan: "escanear"
         case .lights: "luces"
         case .brightness: "brillo"
         case .color: "color"
@@ -71,6 +73,8 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .photos: "tíralas al Mac como hojas"
+        case .send: "archivos, links y texto al Mac"
+        case .scan: "texto al cursor, pizarra a PDF"
         case .lights: "siguen los colores de la pantalla"
         case .brightness: "gira la perilla"
         case .color: "el acento de la app"
@@ -86,6 +90,8 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .photos: "photo.on.rectangle.angled"
+        case .send: "tray.and.arrow.up"
+        case .scan: "doc.viewfinder"
         case .lights: "lightbulb.2"
         case .brightness: "sun.max"
         case .color: "paintpalette"
@@ -150,6 +156,7 @@ struct Instrument: View {
         }
         // Los avisos del Mac: una notificación breve arriba, solo cuando hay algo que decir.
         .overlay(alignment: .top) { Toast() }
+        .overlay { HarvestFall() }
         .animation(.spring(duration: 0.45, bounce: 0.2), value: landscape && deck.mode == .screen)
         // La pantalla en vivo se pide desde aquí, según el modo y la orientación:
         // en horizontal, con el doble de resolución.
@@ -961,6 +968,8 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .photos: TossPage()
+        case .send: SendPage()
+        case .scan: ScanPage()
         case .lights: LightsPage()
         case .color: ColorPage()
         case .touchBar: TouchBarPage()

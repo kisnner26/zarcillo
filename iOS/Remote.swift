@@ -83,6 +83,9 @@ final class Remote: ObservableObject {
     @Published private(set) var frontAppID = ""
     @Published private(set) var frontAppName = ""
     var context: AppContext? { AppContext.for(frontAppID) }
+    /// Lo último cosechado del Mac, para la animación de la hoja que cae.
+    @Published private(set) var harvestImage: UIImage?
+    @Published private(set) var harvests = 0
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
     private var pendingMove = CGVector.zero
@@ -344,6 +347,14 @@ final class Remote: ObservableObject {
             hasTouchBar = bar
         case .touchBarConfig(let config):
             touchBar = config
+        case .harvested(let data):
+            guard let img = UIImage(data: data) else { return }
+            UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
+            UIPasteboard.general.image = img
+            harvestImage = img
+            harvests += 1
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            flash("guardado en Fotos y en el portapapeles")
         case .frontApp(let id, let name):
             frontAppID = id
             frontAppName = name

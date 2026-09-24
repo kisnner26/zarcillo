@@ -16,12 +16,17 @@ final class PhotoDrop: ObservableObject {
         /// Desde qué punto del ancho cae (0…1) y hacia qué lado se mece primero.
         let from: CGFloat
         let sway: CGFloat
+        /// Por dónde entra: "top", "left" o "right" (donde está el iPhone), y
+        /// el ángulo con que se lanzó en el teléfono.
+        let side: String
+        let angle: Double
     }
 
     struct Landed: Identifiable, Equatable {
         let id = UUID()
         let url: URL
         let image: NSImage
+        let isImage: Bool
     }
 
     static let fall: TimeInterval = 2.6
@@ -43,17 +48,23 @@ final class PhotoDrop: ObservableObject {
         return dir
     }
 
-    func receive(_ data: Data) {
+    /// Una foto o un archivo que llega del iPhone. `name` solo viene con
+    /// archivos; las fotos se nombran por fecha.
+    func receive(_ data: Data, name: String? = nil, side: String = "top", angle: Double = 0) {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd 'a las' HH.mm.ss"
-        var url = Self.folder.appendingPathComponent("foto \(f.string(from: Date())).\(ImageKind.fileExtension(of: data))")
+        let base = name.map { ($0 as NSString).deletingPathExtension } ?? "foto \(f.string(from: Date()))"
+        let ext = name.map { ($0 as NSString).pathExtension }.flatMap { $0.isEmpty ? nil : $0 } ?? ImageKind.fileExtension(of: data)
+        var url = Self.folder.appendingPathComponent("\(base).\(ext)")
         var n = 2
         while FileManager.default.fileExists(atPath: url.path) {
-            url = Self.folder.appendingPathComponent("foto \(f.string(from: Date())) \(n).\(ImageKind.fileExtension(of: data))")
+            url = Self.folder.appendingPathComponent("\(base) \(n).\(ext)")
             n += 1
         }
         try? data.write(to: url)
-        guard let image = NSImage(data: data) else { return }
+        let photo = NSImage(data: data)
+        let image = photo ?? NSWorkspace.shared.icon(forFile: url.path)
+        let isImage = photo != nil
 
         screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         showSky()
@@ -61,7 +72,8 @@ final class PhotoDrop: ObservableObject {
         let delay = Double(queued) * 0.45
         queued += 1
         let leaf = Falling(image: image, start: Date().addingTimeInterval(delay),
-                           from: CGFloat.random(in: 0.3...0.7), sway: Bool.random() ? 1 : -1)
+                           from: CGFloat.random(in: 0.3...0.7), sway: Bool.random() ? 1 : -1,
+                           side: side, angle: angle)
         falling.append(leaf)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + delay + Self.fall) { [weak self] in
@@ -69,7 +81,7 @@ final class PhotoDrop: ObservableObject {
             self.queued = max(0, self.queued - 1)
             withAnimation(.spring(duration: 0.55, bounce: 0.35)) {
                 self.falling.removeAll { $0.id == leaf.id }
-                self.landed.insert(Landed(url: url, image: image), at: 0)
+                self.landed.insert(Landed(url: url, image: image, isImage: isImage), at: 0)
                 if self.landed.count > 5 { self.landed.removeLast(self.landed.count - 5) }
             }
             NSSound(named: "Pop")?.play()
@@ -164,16 +176,30 @@ private struct SkyView: View {
         .ignoresSafeArea()
     }
 
-    /// Cae en zigzag, cada vez con menos vaivén, hasta la esquina de la bandeja.
+    /// Entra por el lado donde está el iPhone, sigue la dirección con que se
+    /// lanzó y cae meciéndose hasta la esquina de la bandeja.
     private func position(_ leaf: PhotoDrop.Falling, t: Double, in size: CGSize) -> CGPoint {
-        let startX = size.width * leaf.from
-        let endX = size.width - 190
-        let endY = size.height - 110
-        let ease = t * t * (3 - 2 * t)
-        let x = startX + (endX - startX) * ease + leaf.sway * sin(t * .pi * 3.2) * 120 * (1 - t)
-        // La caída acelera y frena, como una hoja que planea.
-        let y = -140 + (endY + 140) * (1 - pow(1 - t, 1.6))
-        return CGPoint(x: x, y: y)
+        let end = CGPoint(x: size.width - 190, y: size.height - 110)
+        // Punto de entrada y primer tramo, según el lado.
+        let start: CGPoint
+        let push: CGPoint
+        switch leaf.side {
+        case "left":
+            start = CGPoint(x: -160, y: size.height * 0.3)
+            push = CGPoint(x: 520, y: -220 + sin(leaf.angle) * 200)
+        case "right":
+            start = CGPoint(x: size.width + 160, y: size.height * 0.3)
+            push = CGPoint(x: -520, y: -220 - sin(leaf.angle) * 200)
+        default:
+            // Desde abajo del borde superior, con la inclinación del lanzamiento.
+            start = CGPoint(x: size.width * leaf.from + CGFloat(sin(leaf.angle)) * 200, y: -160)
+            push = CGPoint(x: CGFloat(sin(leaf.angle)) * 460, y: 260)
+        }
+        let control = CGPoint(x: start.x + push.x, y: start.y + push.y)
+        let u = 1 - pow(1 - t, 1.5)
+        let x = pow(1 - u, 2) * start.x + 2 * (1 - u) * u * control.x + u * u * end.x
+        let y = pow(1 - u, 2) * start.y + 2 * (1 - u) * u * control.y + u * u * end.y
+        return CGPoint(x: x + leaf.sway * sin(t * .pi * 3.2) * 90 * (1 - t), y: y)
     }
 }
 
@@ -211,14 +237,19 @@ private struct TrayView: View {
             ZStack {
                 ForEach(Array(drop.landed.enumerated().reversed()), id: \.element.id) { i, item in
                     Button { drop.open(item) } label: {
-                        Image(nsImage: item.image).resizable().scaledToFill()
+                        Image(nsImage: item.image).resizable()
+                            .aspectRatio(contentMode: item.isImage ? .fill : .fit)
+                            .padding(item.isImage ? 0 : 18)
                             .frame(width: 110, height: 130)
+                            .background(item.isImage ? Color.clear : MacTone.key)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .stroke(i == 0 ? accent : .white.opacity(0.25), lineWidth: i == 0 ? 2.5 : 1))
                             .shadow(color: .black.opacity(0.4), radius: 10, y: 6)
                     }
                     .buttonStyle(.plain)
+                    // Arrastrar desde el bolsillo a Mail, Finder o donde sea.
+                    .onDrag { NSItemProvider(contentsOf: item.url) ?? NSItemProvider() }
                     .rotationEffect(.degrees(Double(i) * -7))
                     .offset(x: CGFloat(i) * -14, y: CGFloat(i) * 4)
                     .scaleEffect(hovered == item.id ? 1.06 : 1)
@@ -232,11 +263,11 @@ private struct TrayView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "leaf.fill").foregroundStyle(accent)
-                    Text(drop.landed.count == 1 ? "Llegó una foto" : "Llegaron \(drop.landed.count) fotos")
+                    Text(drop.landed.count == 1 ? "Llegó al bolsillo" : "\(drop.landed.count) en el bolsillo")
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
                 }
-                Text("en Descargas › Zarcillo")
+                Text("arrástralos a donde quieras · Descargas › Zarcillo")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
                 HStack(spacing: 8) {
                     Button("Abrir") { if let first = drop.landed.first { drop.open(first) } }

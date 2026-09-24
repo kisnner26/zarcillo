@@ -335,6 +335,37 @@ final class Server: ObservableObject {
         case .lightIdentify(let id):
             lights.identify(id)
 
+        case .photoToss(let data, let angle, let side):
+            photos.receive(data, side: side, angle: angle)
+            reply(key, .status("foto recibida en el Mac"))
+
+        case .file(let name, let data):
+            photos.receive(data, name: name)
+            reply(key, .status("\(name) está en el bolsillo"))
+
+        case .openURL(let s):
+            if let url = URL(string: s) {
+                NSWorkspace.shared.open(url)
+                hud.showMessage(url.host ?? "link", symbol: "link")
+            }
+
+        case .harvest(let x, let y, let w, let h):
+            Task { @MainActor in
+                if let png = await ScreenGrabber.region(x: x, y: y, w: w, h: h) {
+                    self.reply(key, .harvested(png))
+                    self.hud.showMessage("cosechado", symbol: "leaf.fill")
+                } else {
+                    self.reply(key, .status("no pude recortar: falta el permiso de pantalla"))
+                }
+            }
+
+        case .scanPages(let pages):
+            if let url = NotesArchive.save(pages) {
+                hud.showMessage("apuntes guardados", symbol: "doc.viewfinder")
+                reply(key, .status("guardado en Documentos › Zarcillo › Apuntes"))
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+
         case .photo(let data):
             photos.receive(data)
             reply(key, .status("foto recibida en el Mac"))
