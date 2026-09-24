@@ -338,7 +338,7 @@ enum Event: Codable {
     case beat(Double)
     /// La cámara del Mac se está usando (una videollamada).
     case cameraInUse(Bool)
-    case postureState(on: Bool, slouching: Bool)
+    case postureState(on: Bool, slouching: Bool, calibrating: Bool, seen: Bool, score: Double)
     case guardianState(on: Bool, siren: Bool)
     case guardianAlert(reason: String, photo: Data?)
     case nearState(on: Bool, rssi: Int?, threshold: Int, locked: Bool)

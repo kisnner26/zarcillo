@@ -282,30 +282,68 @@ struct CallLightPage: View {
 struct PosturePage: View {
     @EnvironmentObject private var remote: Remote
 
-    private var tint: Color { remote.postureOn ? (remote.slouching ? Tone.ember : Tone.leaf) : Tone.ink.opacity(0.4) }
+    private var tint: Color {
+        guard remote.postureOn else { return Tone.ink.opacity(0.4) }
+        if !remote.postureSeen || remote.postureCalibrating { return Tone.ink.opacity(0.7) }
+        return remote.slouching ? Tone.ember : Tone.leaf
+    }
+
+    private var status: String {
+        guard remote.postureOn else { return "apagado" }
+        if !remote.postureSeen { return "no te veo: ponte frente al Mac" }
+        if remote.postureCalibrating { return "siéntate derecho un momento…" }
+        return remote.slouching ? "te estás encorvando" : "buena postura"
+    }
 
     var body: some View {
         StagePage { side in
             ZStack {
-                Circle().fill(remote.postureOn ? tint.opacity(0.25) : .clear)
-                    .frame(width: side * 0.75, height: side * 0.75).blur(radius: 20)
-                Circle().stroke(tint.opacity(0.35), lineWidth: 1).frame(width: side * 0.62, height: side * 0.62)
-                Image(systemName: remote.slouching ? "figure.fall" : "figure.stand")
-                    .font(.system(size: side * 0.26, weight: .semibold))
+                Circle().fill(remote.postureOn ? tint.opacity(0.22) : .clear)
+                    .frame(width: side * 0.8, height: side * 0.8).blur(radius: 20)
+                // Medidor: el arco se llena a medida que te alejas de tu postura de referencia.
+                Circle().stroke(Tone.stroke, lineWidth: 6).frame(width: side * 0.66, height: side * 0.66)
+                Circle().trim(from: 0, to: remote.postureOn && !remote.postureCalibrating ? min(1, remote.postureScore) : 0)
+                    .stroke(tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: side * 0.66, height: side * 0.66)
+                    .animation(.spring(duration: 0.5), value: remote.postureScore)
+                if remote.postureCalibrating && remote.postureOn {
+                    Circle().trim(from: 0, to: 0.25)
+                        .stroke(Tone.ink.opacity(0.6), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .frame(width: side * 0.66, height: side * 0.66)
+                        .rotationEffect(.degrees(remote.postureCalibrating ? 360 : 0))
+                        .animation(.linear(duration: 1.2).repeatForever(autoreverses: false), value: remote.postureCalibrating)
+                }
+                Image(systemName: !remote.postureSeen && remote.postureOn ? "person.fill.questionmark"
+                      : remote.slouching ? "figure.fall" : "figure.stand")
+                    .font(.system(size: side * 0.24, weight: .semibold))
                     .foregroundStyle(tint)
                     .contentTransition(.symbolEffect(.replace))
             }
             .frame(width: side, height: side)
         } controls: {
-            Text(!remote.postureOn ? "apagado" : (remote.slouching ? "te estás encorvando" : "buena postura"))
-                .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+            Text(status)
+                .font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                .multilineTextAlignment(.center)
+                .contentTransition(.opacity)
             WideButton(title: remote.postureOn ? "dejar de vigilar" : "vigilar mi postura",
                        symbol: remote.postureOn ? "pause.fill" : "figure.stand",
                        filled: !remote.postureOn) {
                 remote.send(.posture(!remote.postureOn))
             }
-            Hint("Usa la cámara del Mac dos veces por segundo, en baja resolución, sin guardar imágenes. Los primeros segundos siéntate derecho: es tu referencia. Si pasas un minuto encorvado, el Mac te avisa.")
+            if remote.postureOn {
+                Button {
+                    Detents.shared.press()
+                    remote.send(.posture(true))   // estando encendido, vuelve a tomar la referencia
+                } label: {
+                    Label("tomar mi postura de nuevo", systemImage: "scope")
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Tone.ember)
+                        .frame(height: 44)
+                }
+            }
+            Hint("La cámara del Mac mira tu cara dos veces por segundo, sin guardar imágenes. Al empezar, siéntate derecho: esa es tu referencia. El iPhone vibra cuando te encorvas y, si sigues así 20 segundos, el Mac te avisa.")
         }
         .animation(.spring(duration: 0.4), value: remote.slouching)
+        .animation(.spring(duration: 0.4), value: remote.postureSeen)
     }
 }

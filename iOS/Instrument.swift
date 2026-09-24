@@ -160,6 +160,17 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         }
     }
 
+    /// Cada rama con su propio verde, ámbar o azul: se distinguen de un vistazo.
+    var hue: Color {
+        switch self {
+        case .mac: Color(red: 0.96, green: 0.62, blue: 0.45)
+        case .send: Color(red: 0.55, green: 0.82, blue: 0.58)
+        case .ambience: Color(red: 0.98, green: 0.80, blue: 0.42)
+        case .security: Color(red: 0.52, green: 0.72, blue: 0.98)
+        case .custom: Color(red: 0.80, green: 0.64, blue: 0.96)
+        }
+    }
+
     var items: [MoreItem] {
         switch self {
         case .mac: [.detach, .mixer, .compass, .gaze, .laser, .gestures, .power, .brightness]
@@ -1037,31 +1048,33 @@ struct MoreStage: View {
 
     private var stem: some View {
         let all = MoreItem.visible(touchBar: remote.hasTouchBar)
+        let live = all.filter { remote.isActive($0) }
+        let selected = all.indices.contains(deck.moreIndex) ? all[deck.moreIndex] : nil
         return GeometryReader { geo in
             let wide = StageMetrics.wide(geo.size)
-            let columns = [GridItem(.adaptive(minimum: wide ? 170 : 150), spacing: Space.s)]
+            let columns = [GridItem(.adaptive(minimum: wide ? 96 : 92, maximum: 140), spacing: Space.s)]
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Space.l) {
-                        ForEach(MoreItem.groups(touchBar: remote.hasTouchBar), id: \.group) { section in
-                            VStack(alignment: .leading, spacing: Space.s) {
-                                Label(section.group.title, systemImage: section.group.symbol)
-                                    .font(.system(size: 11, weight: .bold))
-                                    .textCase(.uppercase)
-                                    .tracking(1.2)
-                                    .foregroundStyle(Tone.ink.opacity(0.45))
-                                    .padding(.leading, 4)
-                                LazyVGrid(columns: columns, spacing: Space.s) {
-                                    ForEach(section.items) { item in
-                                        tile(item, index: all.firstIndex(of: item) ?? 0).id(item)
-                                    }
+                    VStack(spacing: Space.m) {
+                        // Lo que está en marcha ahora, arriba y a mano.
+                        if !live.isEmpty {
+                            ScrollView(.horizontal) {
+                                HStack(spacing: Space.s) {
+                                    ForEach(live) { item in liveChip(item) }
                                 }
+                                .padding(.horizontal, 2)
                             }
+                            .scrollIndicators(.hidden)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        ForEach(MoreItem.groups(touchBar: remote.hasTouchBar), id: \.group) { section in
+                            branch(section.group, section.items, columns: columns, all: all)
                         }
                     }
                     .frame(maxWidth: wide ? 760 : 560)
                     .padding(.horizontal, wide ? Space.l : Space.m)
-                    .padding(.vertical, Space.m)
+                    .padding(.top, Space.m)
+                    .padding(.bottom, 84)   // aire para la etiqueta de abajo
                     .frame(maxWidth: .infinity)
                 }
                 .scrollIndicators(.hidden)
@@ -1071,7 +1084,144 @@ struct MoreStage: View {
                     withAnimation(.spring(duration: 0.35)) { proxy.scrollTo(all[i], anchor: .center) }
                 }
             }
+            // La elegida con la perilla, explicada en una línea.
+            .overlay(alignment: .bottom) {
+                if let item = selected {
+                    HStack(spacing: 10) {
+                        Image(systemName: item.symbol).font(.system(size: 14, weight: .bold)).foregroundStyle(Tone.ember)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.title).font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                            Text(item.detail).font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.6)).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.4))
+                    }
+                    .padding(.horizontal, 16).frame(height: 54)
+                    .frame(maxWidth: 420)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        Haptic.tap()
+                        withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
+                    }
+                    .padding(.horizontal, Space.m).padding(.bottom, Space.m)
+                    .id(item)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.spring(duration: 0.3), value: selected)
+            .animation(.spring(duration: 0.45), value: live)
         }
+    }
+
+    /// Una rama: su hoja con el ícono, su nombre y sus funciones.
+    private func branch(_ group: MoreGroup, _ items: [MoreItem], columns: [GridItem], all: [MoreItem]) -> some View {
+        let running = items.filter { remote.isActive($0) }.count
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                ZStack {
+                    LeafShape().fill(group.hue.opacity(0.22))
+                    LeafShape().stroke(group.hue.opacity(0.7), lineWidth: 1.2)
+                    Image(systemName: group.symbol).font(.system(size: 11, weight: .bold)).foregroundStyle(group.hue)
+                        .offset(y: 2)
+                }
+                .frame(width: 26, height: 32)
+                .rotationEffect(.degrees(-18))
+                Text(group.title).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                Spacer(minLength: 0)
+                if running > 0 {
+                    Text(running == 1 ? "1 activa" : "\(running) activas")
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.onEmber)
+                        .padding(.horizontal, 9).frame(height: 22)
+                        .background(Capsule().fill(Tone.ember))
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            LazyVGrid(columns: columns, spacing: Space.s) {
+                ForEach(items) { item in
+                    tile(item, group: group, index: all.firstIndex(of: item) ?? 0).id(item)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(LinearGradient(colors: [group.hue.opacity(0.07), Tone.key.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        )
+        .overlay(
+            // Un zarcillo que asoma en la esquina de cada rama.
+            Tendril(tightness: 0.35).stroke(group.hue.opacity(0.18), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                .frame(width: 54, height: 54).offset(x: 14, y: -14)
+                .allowsHitTesting(false),
+            alignment: .topTrailing
+        )
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Tone.stroke.opacity(0.8), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .animation(.spring(duration: 0.35), value: running)
+    }
+
+    private func tile(_ item: MoreItem, group: MoreGroup, index: Int) -> some View {
+        let selected = index == deck.moreIndex
+        let on = remote.isActive(item)
+        return Button {
+            Haptic.tap()
+            deck.moreIndex = index
+            withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle().fill(on ? Tone.ember : Tone.recess)
+                        .shadow(color: on ? Tone.ember.opacity(0.6) : .clear, radius: 10)
+                    Image(systemName: item.symbol).font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(on ? Tone.onEmber : group.hue)
+                }
+                .frame(width: 42, height: 42)
+                Text(item.title).font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(on || selected ? Tone.ink : Tone.ink.opacity(0.8))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity).frame(height: 92)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(on ? AnyShapeStyle(LinearGradient(colors: [Tone.ember.opacity(0.32), Tone.ember.opacity(0.08)],
+                                                            startPoint: .top, endPoint: .bottom))
+                             : AnyShapeStyle(Tone.key))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(selected ? Tone.ember : (on ? Tone.ember.opacity(0.45) : Tone.stroke),
+                            lineWidth: selected ? 2 : 1)
+            )
+            // Un brote que late: esta función está encendida.
+            .overlay(alignment: .topTrailing) {
+                if on { PulseDot().padding(9) }
+            }
+            .scaleEffect(selected ? 1.04 : 1)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel(item.title + (on ? ", activa" : ""))
+        .animation(.spring(duration: 0.3), value: selected)
+        .animation(.spring(duration: 0.3), value: on)
+    }
+
+    private func liveChip(_ item: MoreItem) -> some View {
+        Button {
+            Haptic.tap()
+            withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
+        } label: {
+            HStack(spacing: 8) {
+                PulseDot(color: Tone.onEmber)
+                Image(systemName: item.symbol).font(.system(size: 13, weight: .bold))
+                Text(item.title).font(.system(size: 13, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(Tone.onEmber)
+            .padding(.horizontal, 14).frame(height: 40)
+            .background(Capsule().fill(Tone.ember))
+            .shadow(color: Tone.ember.opacity(0.45), radius: 10, y: 3)
+        }
+        .buttonStyle(PressScale())
     }
 
     private func tile(_ item: MoreItem, index: Int) -> some View {
@@ -1242,6 +1392,41 @@ struct DeckStage: View {
                 .animation(.spring(duration: 0.45, bounce: 0.3), value: remote.frontAppID)
             }
             .scrollIndicators(.hidden)
+        }
+    }
+}
+
+/// Un punto que late suavemente: algo está encendido.
+struct PulseDot: View {
+    var color: Color = Tone.ember
+    @State private var beat = false
+
+    var body: some View {
+        ZStack {
+            Circle().fill(color.opacity(0.35)).frame(width: 14, height: 14).scaleEffect(beat ? 1.3 : 0.6).opacity(beat ? 0 : 1)
+            Circle().fill(color).frame(width: 7, height: 7)
+        }
+        .frame(width: 14, height: 14)
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.3).repeatForever(autoreverses: false)) { beat = true }
+        }
+    }
+}
+
+extension Remote {
+    /// Si una función de "más" está encendida ahora mismo.
+    func isActive(_ item: MoreItem) -> Bool {
+        switch item {
+        case .guardian: guardianOn
+        case .near: nearOn
+        case .guest: guestURL != nil
+        case .posture: postureOn
+        case .lights: lightsAmbient
+        case .classes: transcribing
+        case .detach: detachedTitle != nil
+        case .mixer: mixerApps.contains { $0.gain < 0.99 }
+        case .callLight: cameraInUse && UserDefaults.standard.object(forKey: "light.auto") as? Bool ?? true
+        default: false
         }
     }
 }

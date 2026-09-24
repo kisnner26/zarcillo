@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Network
 
 @MainActor
@@ -90,11 +91,12 @@ final class Server: ObservableObject {
                 }
             }
         }
-        posture.onState = { [weak self] bad in
+        posture.onReading = { [weak self] r in
             MainActor.assumeIsolated {
-                guard let self, bad != self.slouching else { return }
-                self.slouching = bad
-                self.broadcast(.postureState(on: true, slouching: bad))
+                guard let self, self.posture.active else { return }
+                self.slouching = r.slouching
+                self.broadcast(.postureState(on: true, slouching: r.slouching, calibrating: r.calibrating,
+                                             seen: r.seen, score: r.score))
             }
         }
         posture.onAlert = { [weak self] in
@@ -456,8 +458,24 @@ final class Server: ObservableObject {
             }
 
         case .posture(let on):
-            if on { posture.start() } else { posture.stop() }
-            broadcast(.postureState(on: on, slouching: false))
+            if on {
+                switch AVCaptureDevice.authorizationStatus(for: .video) {
+                case .denied, .restricted:
+                    reply(key, .status("Zarcillo no tiene permiso de cámara: actívalo en Ajustes › Privacidad › Cámara"))
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")!)
+                    reply(key, .postureState(on: false, slouching: false, calibrating: false, seen: false, score: 0))
+                    return
+                default:
+                    if AVCaptureDevice.default(for: .video) == nil {
+                        reply(key, .status("este Mac no tiene cámara disponible"))
+                        return
+                    }
+                }
+                posture.start()
+            } else {
+                posture.stop()
+            }
+            broadcast(.postureState(on: on, slouching: false, calibrating: on, seen: false, score: 0))
             hud.showMessage(on ? "cuidando tu postura" : "postura en pausa", symbol: "figure.stand")
 
         case .guardian(let on, let siren):

@@ -96,6 +96,9 @@ final class Remote: ObservableObject {
     @Published private(set) var cameraInUse = false
     @Published private(set) var postureOn = false
     @Published private(set) var slouching = false
+    @Published private(set) var postureCalibrating = false
+    @Published private(set) var postureSeen = false
+    @Published private(set) var postureScore = 0.0
     /// Guardián de biblioteca.
     @Published private(set) var guardianOn = false
     @Published private(set) var guardianSiren = true
@@ -390,9 +393,14 @@ final class Remote: ObservableObject {
             beatCount += 1
         case .cameraInUse(let busy):
             cameraInUse = busy
-        case .postureState(let on, let bad):
+        case .postureState(let on, let bad, let calibrating, let seen, let score):
+            // Al empezar a encorvarse, un toque en la mano.
+            if on, bad, !slouching { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
             postureOn = on
             slouching = bad
+            postureCalibrating = calibrating
+            postureSeen = seen
+            postureScore = score
         case .guardianState(let on, let sirenOn):
             guardianOn = on
             guardianSiren = sirenOn

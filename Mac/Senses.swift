@@ -135,19 +135,36 @@ enum CameraWatcher {
 /// postura de referencia; si durante un minuto la cabeza queda bastante más
 /// baja o más cerca de la pantalla, avisa. No guarda ni envía imágenes.
 final class PostureCoach: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+    /// Lo que se ve en cada lectura: si hay cara, si aún calibra y qué tan lejos
+    /// estás de tu postura de referencia (0 = igual, 1 = encorvado).
+    struct Reading: Equatable {
+        var seen = false
+        var calibrating = true
+        var score = 0.0
+        var slouching = false
+    }
+
     private let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "zarcillo.posture")
-    private var baseline: (neck: CGFloat, width: CGFloat)?
+    /// Referencia: altura del centro de la cara y su tamaño (cercanía a la pantalla).
+    private var baseline: (y: CGFloat, size: CGFloat)?
     private var samples: [(CGFloat, CGFloat)] = []
+    private var recent: [Double] = []
     private var badSince: Date?
     private var lastFrame = Date.distantPast
     private var lastAlert = Date.distantPast
-    var onState: ((Bool) -> Void)?
+    /// Arranca distinto de cualquier lectura real: la primera siempre se publica.
+    private var reading = Reading(seen: false, calibrating: true, score: -1)
+    var onReading: ((Reading) -> Void)?
     var onAlert: (() -> Void)?
     private(set) var running = false
+    /// Encendido a ojos del usuario: se apaga al instante, aunque la cámara tarde en soltarse.
+    private(set) var active = false
+    private var misses = 0
 
     func start() {
-        guard !running else { return }
+        active = true
+        guard !running else { recalibrate(); return }
         running = true
         AVCaptureDevice.requestAccess(for: .video) { ok in
             guard ok else { self.queue.async { self.running = false }; return }
@@ -155,20 +172,34 @@ final class PostureCoach: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         }
     }
 
+    /// Siéntate derecho: la próxima media docena de lecturas son la nueva referencia.
+    func recalibrate() {
+        queue.async {
+            self.baseline = nil
+            self.samples = []
+            self.recent = []
+            self.badSince = nil
+        }
+    }
+
     func stop() {
+        active = false
         queue.async {
             self.session.stopRunning()
             // La cámara tarda un momento en figurar como libre: mientras, sigue siendo nuestra.
             self.queue.asyncAfter(deadline: .now() + 3) { self.running = false }
             self.baseline = nil
             self.samples = []
+            self.recent = []
             self.badSince = nil
+            self.reading = Reading(seen: false, calibrating: true, score: -1)
         }
     }
 
     private func configure() {
         if session.inputs.isEmpty {
-            session.sessionPreset = .low
+            // 640×480: la cara se detecta con holgura y sigue siendo liviano.
+            session.sessionPreset = session.canSetSessionPreset(.vga640x480) ? .vga640x480 : .medium
             guard let camera = AVCaptureDevice.default(for: .video),
                   let input = try? AVCaptureDeviceInput(device: camera), session.canAddInput(input) else { return }
             session.addInput(input)
@@ -185,36 +216,55 @@ final class PostureCoach: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         let now = Date()
         guard now.timeIntervalSince(lastFrame) > 0.5, let px = buffer.imageBuffer else { return }
         lastFrame = now
-        let request = VNDetectHumanBodyPoseRequest()
+        let request = VNDetectFaceRectanglesRequest()
         try? VNImageRequestHandler(cvPixelBuffer: px).perform([request])
-        guard let body = request.results?.first,
-              let neck = try? body.recognizedPoint(.neck), neck.confidence > 0.3,
-              let left = try? body.recognizedPoint(.leftShoulder), let right = try? body.recognizedPoint(.rightShoulder),
-              left.confidence > 0.3, right.confidence > 0.3,
-              let nose = try? body.recognizedPoint(.nose), nose.confidence > 0.3 else { return }
-        // Distancia nariz–cuello (vertical) y ancho de hombros (cercanía a la pantalla).
-        let neckGap = nose.location.y - neck.location.y
-        let shoulders = abs(left.location.x - right.location.x)
-
-        guard let base = baseline else {
-            samples.append((neckGap, shoulders))
-            if samples.count >= 16 {
-                let n = CGFloat(samples.count)
-                baseline = (samples.map(\.0).reduce(0, +) / n, samples.map(\.1).reduce(0, +) / n)
+        // La cara más grande: la tuya, no la de alguien que pasa atrás.
+        guard let face = request.results?.max(by: { $0.boundingBox.height < $1.boundingBox.height }) else {
+            // Un cuadro sin cara es normal (parpadeo, movimiento): solo tras varios seguidos "no te veo".
+            misses += 1
+            if misses >= 4 {
+                publish(Reading(seen: false, calibrating: baseline == nil, score: max(0, reading.score), slouching: reading.slouching))
             }
             return
         }
-        // Encorvado: la cabeza se hunde hacia los hombros, o te acercas mucho.
-        let slouching = neckGap < base.neck * 0.72 || shoulders > base.width * 1.3
-        DispatchQueue.main.async { self.onState?(slouching) }
+        misses = 0
+        let y = face.boundingBox.midY          // 0 abajo, 1 arriba
+        let size = face.boundingBox.height
+
+        guard let base = baseline else {
+            samples.append((y, size))
+            if samples.count >= 6 {
+                let n = CGFloat(samples.count)
+                baseline = (samples.map(\.0).reduce(0, +) / n, samples.map(\.1).reduce(0, +) / n)
+            }
+            publish(Reading(seen: true, calibrating: baseline == nil, score: 0, slouching: false))
+            return
+        }
+        // Encorvarse baja la cabeza en la imagen; inclinarse hacia la pantalla la agranda.
+        let drop = Double((base.y - y) / 0.08)
+        let lean = Double((size / max(base.size, 0.01) - 1) / 0.25)
+        recent.append(max(0, max(drop, lean)))
+        if recent.count > 4 { recent.removeFirst() }
+        let score = min(1.5, recent.reduce(0, +) / Double(recent.count))
+        let slouching = score >= 1
+        publish(Reading(seen: true, calibrating: false, score: score, slouching: slouching))
+
         if slouching {
             if badSince == nil { badSince = now }
-            if let since = badSince, now.timeIntervalSince(since) > 60, now.timeIntervalSince(lastAlert) > 300 {
+            if let since = badSince, now.timeIntervalSince(since) > 20, now.timeIntervalSince(lastAlert) > 120 {
                 lastAlert = now
                 DispatchQueue.main.async { self.onAlert?() }
             }
         } else {
             badSince = nil
         }
+    }
+
+    private func publish(_ r: Reading) {
+        var r = r
+        r.score = (r.score * 20).rounded() / 20
+        guard r != reading else { return }
+        reading = r
+        DispatchQueue.main.async { self.onReading?(r) }
     }
 }
