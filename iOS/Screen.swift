@@ -430,7 +430,7 @@ enum AppOrientation: String, CaseIterable, Identifiable {
 /// Decide las orientaciones permitidas de toda la app. Con esto (y no solo
 /// pidiéndolo) el sistema no puede devolver la app a vertical por su cuenta.
 final class OrientationDelegate: NSObject, UIApplicationDelegate {
-    static var mask: UIInterfaceOrientationMask = AppOrientation.current.mask
+    static var mask: UIInterfaceOrientationMask = AppOrientation.current == .portrait ? .portrait : .allButUpsideDown
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         Self.mask
     }
@@ -460,7 +460,10 @@ enum Orientation {
     /// usuario": así, al salir del mando o de la pantalla completa, se vuelve a su preferencia.
     static func request(_ mask: UIInterfaceOrientationMask) {
         let wanted = mask == .allButUpsideDown ? AppOrientation.current.mask : mask
-        OrientationDelegate.mask = wanted
+        // La app nunca prohíbe la vertical: en la Duplicación del iPhone (y con el giro
+        // bloqueado) el sistema no puede girar, y prohibirla hacía que iOS cerrara la
+        // pantalla completa. El horizontal lo garantiza `ForceLandscape`, que gira el contenido.
+        OrientationDelegate.mask = wanted == .portrait ? .portrait : .allButUpsideDown
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         var vc = scene.windows.first?.rootViewController
         while let v = vc {
