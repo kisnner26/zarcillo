@@ -847,7 +847,7 @@ final class Server: ObservableObject {
         Input.refreshTrust()
         // ¿Empezó o terminó una videollamada?
         // La postura y la foto del guardián usan la cámara: eso no es una videollamada.
-        let busy = CameraWatcher.inUse && !posture.running && !guardian.usingCamera
+        let busy = CameraWatcher.inUse && !posture.running && !guardian.usingCamera && !privacy.usingCamera
         if busy != cameraBusy {
             cameraBusy = busy
             broadcast(.cameraInUse(busy))

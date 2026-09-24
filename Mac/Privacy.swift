@@ -25,6 +25,8 @@ final class PrivacyShield {
     var onChange: ((Bool, Bool) -> Void)?
 
     var isOn: Bool { model.on }
+    /// La cámara la está usando el velo: no es una videollamada.
+    var usingCamera: Bool { watcher.usingCamera }
 
     init() {
         watcher.onChange = { [weak self] seen in
@@ -188,7 +190,11 @@ final class OnlookerWatch: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
     private var lastSeen = Date.distantPast
     private var seen = false
     private var running = false
+    /// Hasta cuándo se considera nuestra la cámara: tarda unos segundos en figurar como libre.
+    private var releasedAt = Date.distantPast
     var onChange: ((Bool) -> Void)?
+
+    var usingCamera: Bool { running || Date().timeIntervalSince(releasedAt) < 4 }
 
     func start() {
         guard !running else { return }
@@ -214,6 +220,7 @@ final class OnlookerWatch: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
     func stop() {
         guard running else { return }
         running = false
+        releasedAt = Date()
         queue.async {
             self.session.stopRunning()
             self.hits = 0
