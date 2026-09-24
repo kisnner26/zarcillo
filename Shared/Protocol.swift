@@ -263,6 +263,8 @@ enum Event: Codable {
     case capabilities(touchBar: Bool)
     case touchBarConfig(TouchBarConfig)
     case lights(devices: [LightInfo], ambient: Bool, brightness: Double)
+    /// La app que está al frente en el Mac: la perilla y el Stream Deck se adaptan a ella.
+    case frontApp(id: String, name: String)
 }
 
 /// Qué parte de la pantalla sigue cada foco.

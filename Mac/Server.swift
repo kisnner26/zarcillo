@@ -70,6 +70,9 @@ final class Server: ObservableObject {
         touchBar = TouchBarController(server: self)
         lights.onChange = { [weak self] in self?.broadcastLights() }
         let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.broadcastFrontApp() }
+        }
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.scheduleAppsRefresh() }
@@ -196,6 +199,9 @@ final class Server: ObservableObject {
             reply(key, .capabilities(touchBar: TouchBarController.hasTouchBar))
             reply(key, .touchBarConfig(TouchBarController.config))
             reply(key, .lights(devices: lights.devices, ambient: lights.ambient, brightness: lights.brightness))
+            if let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier {
+                reply(key, .frontApp(id: id, name: app.localizedName ?? ""))
+            }
             artworkSent = nil
             hud.showMessage("\(device) conectado", symbol: "iphone")
 
@@ -333,6 +339,12 @@ final class Server: ObservableObject {
             photos.receive(data)
             reply(key, .status("foto recibida en el Mac"))
         }
+    }
+
+    private func broadcastFrontApp() {
+        guard let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
+              id != Bundle.main.bundleIdentifier else { return }
+        broadcast(.frontApp(id: id, name: app.localizedName ?? ""))
     }
 
     private func broadcastLights() {

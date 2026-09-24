@@ -79,6 +79,10 @@ final class Remote: ObservableObject {
     @Published private(set) var lights: [LightInfo] = []
     @Published var lightsAmbient = false
     @Published var lightsBrightness = 0.8
+    /// La app al frente en el Mac.
+    @Published private(set) var frontAppID = ""
+    @Published private(set) var frontAppName = ""
+    var context: AppContext? { AppContext.for(frontAppID) }
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
     private var pendingMove = CGVector.zero
@@ -340,6 +344,9 @@ final class Remote: ObservableObject {
             hasTouchBar = bar
         case .touchBarConfig(let config):
             touchBar = config
+        case .frontApp(let id, let name):
+            frontAppID = id
+            frontAppName = name
         case .lights(let devices, let ambient, let brightness):
             lights = devices
             lightsAmbient = ambient

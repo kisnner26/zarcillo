@@ -23,12 +23,13 @@ enum Space {
 }
 
 enum DeckMode: Int, CaseIterable, Identifiable {
-    case pad, apps, music, screen, more
+    case pad, deck, apps, music, screen, more
     var id: Int { rawValue }
 
     var label: String {
         switch self {
         case .pad: "pad"
+        case .deck: "botones"
         case .apps: "apps"
         case .music: "música"
         case .screen: "pantalla"
@@ -39,6 +40,7 @@ enum DeckMode: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .pad: "hand.point.up.left"
+        case .deck: "square.grid.3x3.fill"
         case .apps: "leaf"
         case .music: "music.note"
         case .screen: "display"
@@ -223,6 +225,7 @@ struct Stage: View {
             Group {
                 switch deck.mode {
                 case .pad: PadStage()
+                case .deck: DeckStage()
                 case .apps: VineApps()
                 case .music: MusicStage()
                 case .screen: ScreenPage()
@@ -268,9 +271,16 @@ struct ControlDeck: View {
         return remote.volume
     }
 
+    /// En pad y botones, la perilla hace lo que tenga sentido en la app del frente.
+    private var contextKnob: AppContext.Knob {
+        guard deck.mode == .pad || deck.mode == .deck else { return .volume }
+        return remote.context?.knob ?? .volume
+    }
+
     private var caption: String {
+        if contextKnob != .volume { return contextKnob.caption }
         switch deck.mode {
-        case .pad, .music: return "\(Int((remote.volume * 100).rounded()))"
+        case .pad, .deck, .music: return "\(Int((remote.volume * 100).rounded()))"
         case .apps: return "abrir"
         case .screen: return "clic"
         case .more:
@@ -281,8 +291,21 @@ struct ControlDeck: View {
 
     /// Un paso de la perilla. Devuelve `false` si chocó con un tope.
     private func tick(_ step: Int) -> Bool {
+        switch contextKnob {
+        case .frames, .slides:
+            remote.send(.key(name: step > 0 ? "right" : "left"))
+            return true
+        case .zoom:
+            remote.send(.shortcut(Shortcut(title: "", key: step > 0 ? "=" : "-", command: true)))
+            return true
+        case .scroll:
+            remote.scroll(dx: 0, dy: Double(-step) * 40)
+            return true
+        case .volume:
+            break
+        }
         switch deck.mode {
-        case .pad, .music:
+        case .pad, .deck, .music:
             return nudge(.volume, step)
         case .apps:
             guard !remote.apps.isEmpty else { return false }
@@ -303,8 +326,21 @@ struct ControlDeck: View {
     }
 
     private func press() {
+        switch contextKnob {
+        case .frames:
+            remote.send(.key(name: "space"))
+            return
+        case .zoom:
+            remote.send(.shortcut(Shortcut(title: "", key: "0", command: true)))
+            return
+        case .slides:
+            remote.send(.key(name: "right"))
+            return
+        case .scroll, .volume:
+            break
+        }
         switch deck.mode {
-        case .pad, .music:
+        case .pad, .deck, .music:
             remote.send(.media(.playPause))
         case .apps:
             guard remote.apps.indices.contains(deck.appIndex) else { return }
@@ -981,6 +1017,62 @@ struct ColorPage: View {
                 .onChange(of: custom) { _, c in Theme.shared.set(c) }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+}
+
+// MARK: - Botones (Stream Deck)
+
+/// Botones grandes que cambian solos según la app que tengas al frente en el Mac.
+struct DeckStage: View {
+    @EnvironmentObject private var remote: Remote
+    @State private var taps: [String: Int] = [:]
+
+    var body: some View {
+        let context = remote.context
+        let buttons: [AppContext.Button] = context?.buttons.isEmpty == false
+            ? context!.buttons
+            : remote.shortcuts.map { AppContext.Button(title: $0.title, symbol: "command", shortcut: $0) }
+        VStack(spacing: Space.s) {
+            HStack(spacing: Space.s) {
+                if let icon = remote.icons[remote.frontAppID] {
+                    Image(uiImage: icon).resizable().frame(width: 26, height: 26)
+                }
+                Text(context?.name ?? (remote.frontAppName.isEmpty ? "tus atajos" : "\(remote.frontAppName) · tus atajos"))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Tone.ink.opacity(0.6))
+                    .contentTransition(.opacity)
+                Spacer()
+            }
+            .padding(.horizontal, Space.m).padding(.top, Space.m)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
+                    ForEach(buttons) { b in
+                        Button {
+                            Detents.shared.press()
+                            taps[b.id, default: 0] += 1
+                            remote.send(.shortcut(b.shortcut))
+                        } label: {
+                            VStack(spacing: 6) {
+                                Image(systemName: b.symbol).font(.system(size: 22, weight: .semibold))
+                                    .foregroundStyle(Tone.ember)
+                                    .symbolEffect(.bounce, value: taps[b.id, default: 0])
+                                Text(b.title).font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Tone.ink.opacity(0.85)).lineLimit(1).minimumScaleFactor(0.8)
+                                Text(b.shortcut.glyphs).font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundStyle(Tone.ink.opacity(0.4))
+                            }
+                            .frame(maxWidth: .infinity).frame(height: 96)
+                            .background(Keycap(on: false))
+                        }
+                        .buttonStyle(PressScale())
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(Space.m)
+                .animation(.spring(duration: 0.45, bounce: 0.3), value: remote.frontAppID)
+            }
+            .scrollIndicators(.hidden)
         }
     }
 }
