@@ -28,6 +28,7 @@ enum Accent {
 final class TouchBarController: NSObject, NSTouchBarDelegate {
     private static let tray = NSTouchBarItem.Identifier("com.kisnner.zarcillo.tray")
     private static let status = NSTouchBarItem.Identifier("zarcillo.status")
+    private static let app = NSTouchBarItem.Identifier("zarcillo.app")
     private static let playing = NSTouchBarItem.Identifier("zarcillo.playing")
     private static let media = NSTouchBarItem.Identifier("zarcillo.media")
     private static let volume = NSTouchBarItem.Identifier("zarcillo.volume")
@@ -46,6 +47,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var volumeItem: NSSliderTouchBarItem?
     private var brightnessItem: NSSliderTouchBarItem?
     private let routineStack = NSStackView()
+    private let appStack = NSStackView()
+    private var appActions: [DeckAction] = []
 
     /// Si la barra completa está a la vista: solo entonces vale la pena leer la música.
     var isShowing: Bool { bar?.isVisible == true }
@@ -69,7 +72,11 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     static var config: TouchBarConfig {
         get {
             guard let d = UserDefaults.standard.data(forKey: "touchBar"),
-                  let c = try? JSONDecoder().decode(TouchBarConfig.self, from: d) else { return .standard }
+                  var c = try? JSONDecoder().decode(TouchBarConfig.self, from: d) else { return .standard }
+            // Una pieza nueva (las acciones de la app) se suma a lo que ya tenías guardado.
+            for kind in TouchBarConfig.Kind.allCases where !c.slots.contains(where: { $0.kind == kind }) {
+                c.slots.insert(.init(kind: kind, on: kind == .app), at: kind == .app ? 0 : c.slots.count)
+            }
             return c
         }
         set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: "touchBar") }
@@ -125,7 +132,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         b.delegate = self
         // En el orden y con las piezas que elegiste en el iPhone.
         let map: [TouchBarConfig.Kind: NSTouchBarItem.Identifier] = [
-            .playing: Self.playing, .media: Self.media, .volume: Self.volume,
+            .app: Self.app, .playing: Self.playing, .media: Self.media, .volume: Self.volume,
             .brightness: Self.brightness, .routines: Self.routines, .status: Self.status,
         ]
         let hasBrightness = Brightness.get() != nil
@@ -208,6 +215,12 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             item.view = routineStack
             return item
 
+        case Self.app:
+            let item = NSCustomTouchBarItem(identifier: id)
+            appStack.spacing = 6
+            item.view = appStack
+            return item
+
         default:
             return nil
         }
@@ -265,6 +278,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         if let v = Volume.get(), !(volumeItem?.slider.isHighlighted ?? false) { volumeItem?.slider.doubleValue = v }
         if let b = Brightness.get(), !(brightnessItem?.slider.isHighlighted ?? false) { brightnessItem?.slider.doubleValue = b }
 
+        refreshAppActions(server)
+
         let routines = server.routines.prefix(4)
         let titles = routines.map(\.name)
         let current = routineStack.arrangedSubviews.compactMap { ($0 as? NSButton)?.toolTip }
@@ -284,7 +299,34 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         }
     }
 
+    /// Los botones de la app que está al frente: lo esencial y lo que más usas.
+    private func refreshAppActions(_ server: Server) {
+        guard let a = server.deck.current else { return }
+        var seen = Set<String>()
+        let list = (a.quick + a.frequent).filter { $0.enabled && seen.insert($0.id).inserted }.prefix(5)
+        let next = Array(list)
+        guard next != appActions else { return }
+        appActions = next
+        appStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for (i, action) in next.enumerated() {
+            let image = NSImage(systemSymbolName: action.symbol, accessibilityDescription: action.title)
+                ?? NSImage(systemSymbolName: "command", accessibilityDescription: action.title)!
+            let b = NSButton(title: String(action.title.prefix(9)), image: image, target: self, action: #selector(pressApp(_:)))
+            b.imagePosition = .imageLeading
+            b.tag = i
+            b.toolTip = action.title
+            b.translatesAutoresizingMaskIntoConstraints = false
+            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
+            appStack.addArrangedSubview(b)
+        }
+    }
+
     // MARK: Acciones
+
+    @objc private func pressApp(_ sender: NSButton) {
+        guard appActions.indices.contains(sender.tag) else { return }
+        server?.deck.press(appActions[sender.tag])
+    }
 
     @objc private func showStatus() {
         guard let server else { return }

@@ -50,12 +50,13 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
+    case classes, photos, send, scan, shots, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .classes: "clases"
+        case .shots: "capturas"
         case .permissions: "permisos"
         case .detach: "desprender"
         case .mixer: "mezclador"
@@ -84,6 +85,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .classes: "transcribe y traduce en vivo"
+        case .shots: "las del Mac, listas para usar"
         case .permissions: "lo que el Mac te deja usar"
         case .detach: "una ventana del Mac en tu mano"
         case .mixer: "volumen por app"
@@ -112,6 +114,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .classes: "waveform"
+        case .shots: "camera.viewfinder"
         case .permissions: "checkmark.shield"
         case .detach: "macwindow.badge.plus"
         case .mixer: "slider.vertical.3"
@@ -177,7 +180,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
     var items: [MoreItem] {
         switch self {
         case .mac: [.detach, .mixer, .compass, .gaze, .laser, .gestures, .power, .brightness]
-        case .send: [.photos, .send, .scan, .classes]
+        case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
         case .security: [.guardian, .near, .guest]
         case .custom: [.routines, .shortcuts, .touchBar, .color, .permissions]
@@ -1251,6 +1254,7 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .classes: ClassesPage()
+        case .shots: ShotsPage()
         case .permissions: PermissionsPage()
         case .detach: DetachPage()
         case .mixer: MixerPage()
@@ -1330,54 +1334,200 @@ struct ColorPage: View {
 struct DeckStage: View {
     @EnvironmentObject private var remote: Remote
     @State private var taps: [String: Int] = [:]
+    @State private var menuID: String?
+    @State private var query = ""
+
+    /// Sin lectura de menús aún: tus atajos de siempre.
+    private var fallback: [DeckAction] {
+        remote.shortcuts.map { s in
+            var mods = 0
+            if s.command { mods |= DeckAction.cmd }
+            if s.shift { mods |= DeckAction.shift }
+            if s.option { mods |= DeckAction.option }
+            if s.control { mods |= DeckAction.control }
+            return DeckAction(id: "s:\(s.id)", title: s.title, symbol: "command", glyphs: s.glyphs, key: s.key, mods: mods)
+        }
+    }
 
     var body: some View {
-        let context = remote.context
-        let buttons: [AppContext.Button] = context?.buttons.isEmpty == false
-            ? context!.buttons
-            : remote.shortcuts.map { AppContext.Button(title: $0.title, symbol: "command", shortcut: $0) }
+        let a = remote.appActions
+        VStack(spacing: Space.s) {
+            header(a)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.m) {
+                    if !query.isEmpty { results(a) } else { content(a) }
+                }
+                .padding(.horizontal, Space.m).padding(.bottom, Space.m)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .onAppear { remote.requestAppActions() }
+    }
+
+    // MARK: Encabezado y búsqueda
+
+    private func header(_ a: AppActions?) -> some View {
         VStack(spacing: Space.s) {
             HStack(spacing: Space.s) {
                 if let icon = remote.icons[remote.frontAppID] {
                     Image(uiImage: icon).resizable().frame(width: 26, height: 26)
                 }
-                Text(context?.name ?? (remote.frontAppName.isEmpty ? "tus atajos" : "\(remote.frontAppName) · tus atajos"))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Tone.ink.opacity(0.6))
-                    .contentTransition(.opacity)
-                    .lineLimit(1)
+                Text(a?.appName ?? (remote.frontAppName.isEmpty ? "tus atajos" : remote.frontAppName))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(Tone.ink.opacity(0.8))
+                    .contentTransition(.opacity).lineLimit(1)
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, Space.m).padding(.top, Space.m)
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
-                    ForEach(buttons) { b in
-                        Button {
-                            Detents.shared.press()
-                            taps[b.id, default: 0] += 1
-                            remote.send(.shortcut(b.shortcut))
-                        } label: {
-                            VStack(spacing: 6) {
-                                Image(systemName: b.symbol).font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(Tone.ember)
-                                    .symbolEffect(.bounce, value: taps[b.id, default: 0])
-                                Text(b.title).font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(Tone.ink.opacity(0.85)).lineLimit(1).minimumScaleFactor(0.8)
-                                Text(b.shortcut.glyphs).font(.system(size: 10, weight: .medium, design: .rounded))
-                                    .foregroundStyle(Tone.ink.opacity(0.4))
-                            }
-                            .frame(maxWidth: .infinity).frame(height: 96)
-                            .background(Keycap(on: false))
-                        }
-                        .buttonStyle(PressScale())
-                        .transition(.scale.combined(with: .opacity))
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Tone.ink.opacity(0.45))
+                TextField("buscar en los menús de la app", text: $query)
+                    .font(.system(size: 14)).foregroundStyle(Tone.ink)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                if !query.isEmpty {
+                    Button { query = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Tone.ink.opacity(0.4))
                     }
                 }
-                .padding(Space.m)
-                .animation(.spring(duration: 0.45, bounce: 0.3), value: remote.frontAppID)
             }
-            .scrollIndicators(.hidden)
+            .padding(.horizontal, 14).frame(height: 40)
+            .background(Capsule().fill(Tone.key))
         }
+        .padding(.horizontal, Space.m).padding(.top, Space.m)
+    }
+
+    // MARK: Contenido
+
+    @ViewBuilder private func content(_ a: AppActions?) -> some View {
+        let quick = (a?.quick.isEmpty == false) ? a!.quick : fallback
+        if !quick.isEmpty {
+            section(a?.quick.isEmpty == false ? "esenciales" : "tus atajos") { grid(quick) }
+        }
+        if let f = a?.frequent, !f.isEmpty {
+            section("lo que más usas") { grid(f) }
+        }
+        if let a, !a.menus.isEmpty {
+            let current = a.menus.first { $0.id == menuID } ?? a.menus[0]
+            section("menús") {
+                menuChips(a.menus, selected: current.id)
+                grid(current.actions)
+            }
+        } else if let a, !a.scanned {
+            HStack(spacing: 8) {
+                ProgressView().tint(Tone.ember)
+                Text("leyendo los menús…").font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
+            }
+        } else if remote.permissions[.accessibility] == .denied {
+            permissionCard
+        }
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder _ body: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 11, weight: .bold)).textCase(.uppercase).tracking(1.2)
+                .foregroundStyle(Tone.ink.opacity(0.45)).padding(.leading, 4)
+            body()
+        }
+    }
+
+    private func grid(_ actions: [DeckAction]) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+            ForEach(actions) { tile($0) }
+        }
+        .animation(.spring(duration: 0.4, bounce: 0.25), value: remote.frontAppID)
+    }
+
+    private func menuChips(_ menus: [MenuGroup], selected: String) -> some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(menus) { m in
+                    let on = m.id == selected
+                    Button {
+                        Haptic.tap()
+                        withAnimation(.spring(duration: 0.3)) { menuID = m.id }
+                    } label: {
+                        Text(m.title).font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(on ? Tone.onEmber : Tone.ink.opacity(0.75))
+                            .padding(.horizontal, 14).frame(height: 34)
+                            .background(Capsule().fill(on ? Tone.ember : Tone.key))
+                    }
+                    .buttonStyle(PressScale())
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var permissionCard: some View {
+        HStack(spacing: Space.s) {
+            Image(systemName: "hand.raised.fill").foregroundStyle(Tone.ember)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Falta Accesibilidad en el Mac").font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ink)
+                Text("Sin ella no se pueden leer los menús de la app.").font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.5))
+            }
+            Spacer(minLength: 0)
+            Button("pedir") { remote.requestPermission(.accessibility) }
+                .font(.system(size: 13, weight: .bold)).foregroundStyle(Tone.onEmber)
+                .padding(.horizontal, 14).frame(height: 34).background(Capsule().fill(Tone.ember))
+        }
+        .padding(Space.s)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+    }
+
+    // MARK: Búsqueda
+
+    @ViewBuilder private func results(_ a: AppActions?) -> some View {
+        let q = query.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        var seen = Set<String>()
+        let pool = ((a?.quick ?? []) + (a?.frequent ?? []) + (a?.menus.flatMap(\.actions) ?? []))
+            .filter { seen.insert($0.id).inserted }
+        let found = pool.filter {
+            ($0.title + " " + ($0.path ?? []).joined(separator: " "))
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).contains(q)
+        }
+        if found.isEmpty {
+            Text("nada se llama así en esta app").font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.5))
+                .frame(maxWidth: .infinity).padding(.top, Space.xl)
+        } else {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+                ForEach(found.prefix(60)) { tile($0, subtitle: $0.glyphs.isEmpty ? $0.path?.first : $0.glyphs) }
+            }
+        }
+    }
+
+    // MARK: Ficha
+
+    private func press(_ action: DeckAction) {
+        guard action.enabled else { Haptic.tap(); return }
+        Detents.shared.press()
+        taps[action.id, default: 0] += 1
+        remote.press(action)
+    }
+
+    private func tile(_ action: DeckAction, subtitle: String? = nil) -> some View {
+        Button { press(action) } label: {
+            VStack(spacing: 5) {
+                Image(systemName: action.symbol).font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(action.enabled ? Tone.ember : Tone.ink.opacity(0.3))
+                    .symbolEffect(.bounce, value: taps[action.id, default: 0])
+                Text(action.title).font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Tone.ink.opacity(action.enabled ? 0.9 : 0.4))
+                    .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.8)
+                Text(subtitle ?? action.glyphs).font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(Tone.ink.opacity(0.4)).lineLimit(1)
+            }
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity).frame(height: 92)
+            .background(Keycap(on: action.marked))
+            .overlay(alignment: .topTrailing) {
+                if action.marked {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(Tone.ember).padding(8)
+                }
+            }
+            .opacity(action.enabled ? 1 : 0.6)
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel(action.title + (action.glyphs.isEmpty ? "" : ", " + action.glyphs) + (action.enabled ? "" : ", no disponible"))
     }
 }
 

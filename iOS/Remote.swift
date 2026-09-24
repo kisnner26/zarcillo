@@ -35,6 +35,15 @@ enum Keychain {
     }
 }
 
+/// Una captura de pantalla que llegó del Mac.
+struct Shot: Identifiable {
+    let id = UUID()
+    let name: String
+    let image: UIImage
+    let data: Data
+    let at: Date
+}
+
 @MainActor
 final class Remote: ObservableObject {
     enum Phase: Equatable {
@@ -91,6 +100,35 @@ final class Remote: ObservableObject {
     @Published private(set) var knobMarks = 0
     func markFromKnob() { knobMarks += 1 }
 
+    /// Pulsa una acción de la app del Mac; un momento después se refresca lo más usado.
+    func press(_ action: DeckAction) {
+        send(.pressAction(action))
+    }
+
+    func requestAppActions() { send(.requestAppActions) }
+
+    func setScreenshots(_ on: Bool) {
+        screenshotsOn = on
+        send(.screenshotsToPhone(on))
+    }
+
+    /// Una captura del Mac: se copia al portapapeles y/o se guarda en Fotos según lo que elijas,
+    /// y cae una hoja en la pantalla.
+    private func receiveShot(_ name: String, _ data: Data) {
+        guard let image = UIImage(data: data) else { return }
+        let shot = Shot(name: name, image: image, data: data, at: Date())
+        shots.insert(shot, at: 0)
+        if shots.count > 12 { shots.removeLast(shots.count - 12) }
+        let d = UserDefaults.standard
+        if d.object(forKey: "shots.copy") as? Bool ?? true { UIPasteboard.general.image = image }
+        if d.bool(forKey: "shots.save") { UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil) }
+        showLeaf(image)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        flash(d.object(forKey: "shots.copy") as? Bool ?? true ? "captura del Mac copiada" : "captura del Mac lista")
+    }
+
+    func removeShot(_ shot: Shot) { shots.removeAll { $0.id == shot.id } }
+
     /// Pide el permiso en el Mac: sale el aviso del sistema o se abre Ajustes allí.
     func requestPermission(_ kind: PermissionKind) {
         send(.requestPermission(kind))
@@ -129,6 +167,11 @@ final class Remote: ObservableObject {
     @Published private(set) var guestURL: String?
     @Published private(set) var guestExpires: Date?
     @Published private(set) var detachedTitle: String?
+    /// Botones de la app que está al frente en el Mac (sus menús, lo esencial, lo más usado).
+    @Published private(set) var appActions: AppActions?
+    /// Capturas de pantalla del Mac que llegaron (la más nueva primero).
+    @Published private(set) var shots: [Shot] = []
+    @Published private(set) var screenshotsOn = true
     /// Permisos de macOS que el Mac tiene dados (o no).
     @Published private(set) var permissions: [PermissionKind: PermissionState] = [:]
     /// Lo que el Mac entregó cuando el reloj pidió agarrar algo.
@@ -447,6 +490,12 @@ final class Remote: ObservableObject {
         case .guestPass(let url, let expires):
             guestURL = url
             guestExpires = expires.map { Date(timeIntervalSince1970: $0) }
+        case .appActions(let a):
+            appActions = a
+        case .screenshotsState(let on):
+            screenshotsOn = on
+        case .screenshot(let name, let data):
+            receiveShot(name, data)
         case .macPermissions(let list):
             permissions = Dictionary(uniqueKeysWithValues: list.map { ($0.kind, $0.state) })
         case .grabbed(let kind, let name, let data, let text):

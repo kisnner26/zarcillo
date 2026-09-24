@@ -36,6 +36,12 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Zarcillo usa la cámara del Mac solo para el aviso de postura, sin guardar imágenes, y para fotografiar a quien toque tu Mac si activas el guardián.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Zarcillo ve cuándo tomas una captura de pantalla en el Escritorio para mandártela al iPhone.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Zarcillo ve cuándo tomas una captura si la guardas en Documentos, para mandártela al iPhone.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Zarcillo ve cuándo tomas una captura si la guardas en Descargas, para mandártela al iPhone.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Kisnner Obando</string>
 	<key>NSLocalNetworkUsageDescription</key>

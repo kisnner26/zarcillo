@@ -29,6 +29,9 @@ final class Server: ObservableObject {
     let near = ProximityLock()
     let guest = GuestSprout()
     let mixer = Mixer()
+    let deck = DeckEngine()
+    let shots = ScreenshotWatcher()
+    @Published private(set) var sendScreenshots = true
     /// Estado de los permisos de macOS; el menú y el iPhone lo muestran.
     @Published private(set) var permissions: [PermissionEntry] = Permissions.all()
     /// La ventana desprendida, si la hay: el stream manda solo esa.
@@ -105,6 +108,21 @@ final class Server: ObservableObject {
             MainActor.assumeIsolated {
                 self?.hud.showMessage("endereza la espalda", symbol: "figure.stand")
             }
+        }
+        // Botones que se adaptan a la app al frente: iPhone y Touch Bar comparten el motor.
+        deck.onChange = { [weak self] actions in
+            self?.broadcast(.appActions(actions))
+            self?.touchBar?.refresh()
+        }
+        deck.onFail = { [weak self] action in
+            self?.hud.showMessage("\(action.title) no está disponible", symbol: "exclamationmark.circle")
+        }
+        deck.refresh()
+        sendScreenshots = shots.enabled
+        shots.onShot = { [weak self] name, data in
+            guard let self, !self.clients.isEmpty else { return }
+            self.broadcast(.screenshot(name: name, data: data))
+            self.hud.showMessage("captura enviada al iPhone", symbol: "camera.viewfinder")
         }
         guardian.onAlert = { [weak self] reason, photo in
             guard let self else { return }
@@ -263,6 +281,9 @@ final class Server: ObservableObject {
             reply(key, .touchBarConfig(TouchBarController.config))
             reply(key, .lights(devices: lights.devices, ambient: lights.ambient, brightness: lights.brightness))
             reply(key, .macPermissions(permissions))
+            reply(key, .screenshotsState(shots.enabled))
+            deck.refresh(force: true)
+            if let a = deck.current { reply(key, .appActions(a)) }
             reply(key, .guardianState(on: guardian.armed, siren: guardian.siren))
             reply(key, .nearState(on: near.on, rssi: near.rssi, threshold: near.threshold, locked: near.locked))
             reply(key, .guestPass(url: guest.url, expires: guest.expires?.timeIntervalSince1970))
@@ -546,6 +567,19 @@ final class Server: ObservableObject {
                 }
             }
 
+        case .requestAppActions:
+            deck.refresh(force: true)
+            if let a = deck.current { reply(key, .appActions(a)) }
+
+        case .pressAction(let action):
+            deck.press(action)
+
+        case .screenshotsToPhone(let on):
+            shots.setEnabled(on)
+            sendScreenshots = on
+            broadcast(.screenshotsState(on))
+            hud.showMessage(on ? "capturas al iPhone: sí" : "capturas al iPhone: no", symbol: "camera.viewfinder")
+
         case .requestPermission(let kind):
             Permissions.request(kind)
             hud.showMessage("mira el aviso en el Mac", symbol: kind.symbol)
@@ -581,9 +615,16 @@ final class Server: ObservableObject {
         guard let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
               id != Bundle.main.bundleIdentifier else { return }
         broadcast(.frontApp(id: id, name: app.localizedName ?? ""))
+        deck.refresh()
     }
 
     /// Si algún permiso cambió (en Ajustes, o al aceptar el aviso), el menú y el iPhone se enteran.
+    func setScreenshots(_ on: Bool) {
+        shots.setEnabled(on)
+        sendScreenshots = on
+        broadcast(.screenshotsState(on))
+    }
+
     private func refreshPermissions() {
         let now = Permissions.all()
         guard now != permissions else { return }
@@ -741,6 +782,7 @@ final class Server: ObservableObject {
         }
         canControl = Input.isTrusted
         refreshPermissions()
+        shots.recheckLocation()
         mixer.refresh()
         canCapture = ScreenGrabber.allowed
         if canCapture != wasCapture {

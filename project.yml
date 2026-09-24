@@ -71,6 +71,9 @@ targets:
         NSCameraUsageDescription: Zarcillo usa la cámara del Mac solo para el aviso de postura, sin guardar imágenes, y para fotografiar a quien toque tu Mac si activas el guardián.
         NSAudioCaptureUsageDescription: Zarcillo toma el audio de cada app para darle su propio volumen desde el iPhone. No graba nada.
         NSBluetoothAlwaysUsageDescription: Zarcillo mide la señal de tu iPhone para bloquear el Mac cuando te alejas.
+        NSDesktopFolderUsageDescription: Zarcillo ve cuándo tomas una captura de pantalla en el Escritorio para mandártela al iPhone.
+        NSDocumentsFolderUsageDescription: Zarcillo ve cuándo tomas una captura si la guardas en Documentos, para mandártela al iPhone.
+        NSDownloadsFolderUsageDescription: Zarcillo ve cuándo tomas una captura si la guardas en Descargas, para mandártela al iPhone.
         NSAppleEventsUsageDescription: Zarcillo lee qué suena en Música o Spotify para mostrarlo en tu iPhone.
     settings:
       base:

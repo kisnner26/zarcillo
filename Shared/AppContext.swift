@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation
 
 /// Qué hace la perilla y qué botones muestra el Stream Deck según la app que
 /// está al frente en el Mac.
@@ -116,6 +116,49 @@ struct AppContext {
             ])
         case "com.apple.Music", "com.spotify.client":
             return AppContext(name: "Música", knob: .volume, buttons: [])
+        case "com.apple.finder":
+            return AppContext(name: "Finder", knob: .scroll, buttons: [
+                b("nueva carpeta", "folder.badge.plus", "n", cmd: true, shift: true), b("info", "info.circle", "i", cmd: true),
+                b("duplicar", "plus.square.on.square", "d", cmd: true), b("vista previa", "eye", "y", cmd: true),
+                b("ir a carpeta", "arrow.right.circle", "g", cmd: true, shift: true), b("a la papelera", "trash", "delete", cmd: true),
+                b("mostrar ocultos", "eye.slash", ".", cmd: true, shift: true), b("abrir", "arrow.up.forward.app", "o", cmd: true),
+            ])
+        case "com.apple.Terminal", "com.googlecode.iterm2":
+            return AppContext(name: "Terminal", knob: .scroll, buttons: [
+                b("nueva pestaña", "plus.square.on.square", "t", cmd: true), b("nueva ventana", "macwindow.badge.plus", "n", cmd: true),
+                b("limpiar", "eraser", "k", cmd: true), b("cerrar", "xmark.square", "w", cmd: true),
+                b("buscar", "magnifyingglass", "f", cmd: true), b("dividir", "rectangle.split.2x1", "d", cmd: true),
+            ])
+        case "com.apple.mail", "com.microsoft.Outlook":
+            return AppContext(name: "Correo", knob: .scroll, buttons: [
+                b("nuevo", "square.and.pencil", "n", cmd: true), b("responder", "arrowshape.turn.up.left", "r", cmd: true),
+                b("responder a todos", "arrowshape.turn.up.left.2", "r", cmd: true, shift: true), b("reenviar", "arrowshape.turn.up.right", "f", cmd: true, shift: true),
+                b("archivar", "archivebox", "e", cmd: true, ctrl: true), b("enviar", "paperplane.fill", "d", cmd: true, shift: true),
+            ])
+        case "com.apple.Notes":
+            return AppContext(name: "Notas", knob: .scroll, buttons: [
+                b("nueva nota", "square.and.pencil", "n", cmd: true), b("lista", "checklist", "l", cmd: true, shift: true),
+                b("negrita", "bold", "b", cmd: true), b("cursiva", "italic", "i", cmd: true),
+                b("título", "textformat.size", "t", cmd: true, shift: true), b("buscar", "magnifyingglass", "f", cmd: true, opt: true),
+            ])
+        case "com.apple.MobileSMS", "net.whatsapp.WhatsApp", "com.tinyspeck.slackmacgap", "com.hnc.Discord":
+            return AppContext(name: "Mensajes", knob: .scroll, buttons: [
+                b("nuevo chat", "square.and.pencil", "n", cmd: true), b("buscar", "magnifyingglass", "k", cmd: true),
+                b("siguiente", "chevron.down", "]", cmd: true), b("anterior", "chevron.up", "[", cmd: true),
+                b("adjuntar", "paperclip", "u", cmd: true), b("emoji", "face.smiling", "space", cmd: true, ctrl: true),
+            ])
+        case "com.microsoft.Word", "com.apple.iWork.Pages":
+            return AppContext(name: "Documento", knob: .scroll, buttons: [
+                b("negrita", "bold", "b", cmd: true), b("cursiva", "italic", "i", cmd: true),
+                b("subrayado", "underline", "u", cmd: true), b("guardar", "square.and.arrow.down", "s", cmd: true),
+                b("buscar", "magnifyingglass", "f", cmd: true), b("imprimir", "printer", "p", cmd: true),
+            ])
+        case "com.microsoft.Excel", "com.apple.iWork.Numbers":
+            return AppContext(name: "Hoja de cálculo", knob: .scroll, buttons: [
+                b("guardar", "square.and.arrow.down", "s", cmd: true), b("negrita", "bold", "b", cmd: true),
+                b("buscar", "magnifyingglass", "f", cmd: true), b("deshacer", "arrow.uturn.backward", "z", cmd: true),
+                b("rehacer", "arrow.uturn.forward", "z", cmd: true, shift: true), b("imprimir", "printer", "p", cmd: true),
+            ])
         default:
             return nil
         }

@@ -56,6 +56,7 @@ struct MenuView: View {
                 detail: "Para ver el Mac en el iPhone hace falta el permiso de Grabación de pantalla.",
                 symbol: "rectangle.dashed", action: ScreenGrabber.requestAccess) }
             optionalPermissions
+            screenshotsToggle
             if let problem = server.problem {
                 Text(problem).font(.caption).foregroundStyle(.red)
             }
@@ -121,6 +122,22 @@ struct MenuView: View {
         }
         .padding(14)
         .background(Ceramic(shape: RoundedRectangle(cornerRadius: 20, style: .continuous), fill: MacTone.recess))
+    }
+
+    private var screenshotsToggle: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "camera.viewfinder").font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(MacTone.ember).frame(width: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Capturas al iPhone").font(.system(size: 12, weight: .semibold)).foregroundStyle(MacTone.ink)
+                Text("⇧⌘3, ⇧⌘4 y ⇧⌘5").font(.system(size: 10)).foregroundStyle(MacTone.ink.opacity(0.5))
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: Binding(get: { server.sendScreenshots }, set: { server.setScreenshots($0) }))
+                .labelsHidden().toggleStyle(.switch)
+        }
+        .padding(12)
+        .background(Ceramic(shape: RoundedRectangle(cornerRadius: 16, style: .continuous), fill: MacTone.key))
     }
 
     /// Cámara, Bluetooth y automatización: solo hacen falta para funciones concretas.

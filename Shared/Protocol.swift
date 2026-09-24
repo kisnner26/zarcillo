@@ -317,6 +317,11 @@ enum Command: Codable {
     case grab
     /// Pide un permiso de macOS en el Mac (aviso del sistema o panel de Ajustes).
     case requestPermission(PermissionKind)
+    /// Acciones de la app que está al frente en el Mac.
+    case requestAppActions
+    case pressAction(DeckAction)
+    /// Mandar al iPhone cada captura de pantalla que se tome en el Mac.
+    case screenshotsToPhone(Bool)
 }
 
 /// Mac → iPhone.
@@ -355,6 +360,10 @@ enum Event: Codable {
     case grabbed(kind: String, name: String, data: Data?, text: String?)
     /// Estado de cada permiso de macOS que usa Zarcillo.
     case macPermissions([PermissionEntry])
+    case appActions(AppActions)
+    /// Una captura de pantalla recién tomada en el Mac (PNG o JPEG).
+    case screenshot(name: String, data: Data)
+    case screenshotsState(Bool)
 }
 
 /// Qué parte de la pantalla sigue cada foco.
@@ -388,10 +397,11 @@ struct TouchBarConfig: Codable, Equatable {
     }
 
     enum Kind: String, Codable, CaseIterable {
-        case playing, media, volume, brightness, routines, status
+        case app, playing, media, volume, brightness, routines, status
 
         var label: String {
             switch self {
+            case .app: "acciones de la app"
             case .playing: "lo que suena"
             case .media: "controles de música"
             case .volume: "volumen"
@@ -403,6 +413,7 @@ struct TouchBarConfig: Codable, Equatable {
 
         var symbol: String {
             switch self {
+            case .app: "square.grid.2x2.fill"
             case .playing: "music.note"
             case .media: "playpause.fill"
             case .volume: "speaker.wave.2.fill"
@@ -416,6 +427,7 @@ struct TouchBarConfig: Codable, Equatable {
     var slots: [Slot]
 
     static let standard = TouchBarConfig(slots: [
+        Slot(kind: .app, on: true),
         Slot(kind: .playing, on: true),
         Slot(kind: .media, on: true),
         Slot(kind: .volume, on: true),
