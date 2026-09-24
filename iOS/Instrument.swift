@@ -50,12 +50,15 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
+    case classes, photos, send, scan, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .classes: "clases"
+        case .compass: "brújula"
+        case .callLight: "luz de llamada"
+        case .posture: "postura"
         case .photos: "fotos"
         case .send: "enviar"
         case .scan: "escanear"
@@ -74,6 +77,9 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .classes: "transcribe y traduce en vivo"
+        case .compass: "apunta a una ventana del Mac"
+        case .callLight: "tu iPhone te ilumina en videollamadas"
+        case .posture: "la cámara del Mac te avisa si te encorvas"
         case .photos: "tíralas al Mac como hojas"
         case .send: "archivos, links y texto al Mac"
         case .scan: "texto al cursor, pizarra a PDF"
@@ -92,6 +98,9 @@ enum MoreItem: Int, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .classes: "waveform"
+        case .compass: "location.north.line"
+        case .callLight: "light.max"
+        case .posture: "figure.stand"
         case .photos: "photo.on.rectangle.angled"
         case .send: "tray.and.arrow.up"
         case .scan: "doc.viewfinder"
@@ -132,6 +141,8 @@ struct Instrument: View {
     @Environment(\.isLandscape) private var landscape
     @StateObject private var deck = Deck()
     @StateObject private var voice = VoiceCommander()
+    @State private var callLight = false
+    @AppStorage("light.auto") private var autoLight = true
 
     var body: some View {
         Group {
@@ -162,6 +173,10 @@ struct Instrument: View {
         .overlay(alignment: .top) { Toast() }
         .overlay { HarvestFall() }
         .overlay(alignment: .top) { VoiceOverlay(voice: voice).padding(.top, Space.s) }
+        .fullScreenCover(isPresented: $callLight) { CallLight(shown: $callLight) }
+        .onChange(of: remote.cameraInUse) { _, busy in
+            if autoLight { callLight = busy }
+        }
         .onAppear { voice.attach(remote) }
         .environmentObject(voice)
         .animation(.spring(duration: 0.45, bounce: 0.2), value: landscape && deck.mode == .screen)
@@ -1001,6 +1016,9 @@ struct MoreStage: View {
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
         case .classes: ClassesPage()
+        case .compass: CompassPage()
+        case .callLight: CallLightPage()
+        case .posture: PosturePage()
         case .photos: TossPage()
         case .send: SendPage()
         case .scan: ScanPage()

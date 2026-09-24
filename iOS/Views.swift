@@ -356,6 +356,10 @@ struct GesturePage: View {
             .id(shown)
             .transition(.scale(scale: 0.7).combined(with: .opacity))
 
+            BlowCard()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(Space.l)
+
             // Cada indicación vive en el borde hacia el que se desliza.
             hint(.missionControl, "arrow.up", "Mission Control").frame(maxHeight: .infinity, alignment: .top)
             hint(.appWindows, "arrow.down", "ventanas").frame(maxHeight: .infinity, alignment: .bottom)

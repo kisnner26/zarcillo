@@ -261,6 +261,12 @@ enum Command: Codable {
     case transcript(text: String, translation: String?, final: Bool)
     case transcriptMark
     case transcriptEnd
+    /// Soplar: las ventanas se dispersan (o vuelven, si ya se habían ido).
+    case blow
+    /// Sentir la música: el Mac escucha su propio audio y avisa cada golpe.
+    case beats(Bool)
+    /// Postura: la cámara del Mac vigila si te encorvas.
+    case posture(Bool)
 }
 
 /// Mac → iPhone.
@@ -283,6 +289,11 @@ enum Event: Codable {
     case frontApp(id: String, name: String)
     /// Lo cosechado, en PNG.
     case harvested(Data)
+    /// Un golpe de la música, con su fuerza 0…1.
+    case beat(Double)
+    /// La cámara del Mac se está usando (una videollamada).
+    case cameraInUse(Bool)
+    case postureState(on: Bool, slouching: Bool)
 }
 
 /// Qué parte de la pantalla sigue cada foco.

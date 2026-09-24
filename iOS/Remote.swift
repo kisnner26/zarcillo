@@ -90,6 +90,12 @@ final class Remote: ObservableObject {
     @Published var transcribing = false
     @Published private(set) var knobMarks = 0
     func markFromKnob() { knobMarks += 1 }
+    /// Sentir la música: cada golpe vibra en la mano.
+    @Published var feelingBeats = false
+    @Published private(set) var beatCount = 0
+    @Published private(set) var cameraInUse = false
+    @Published private(set) var postureOn = false
+    @Published private(set) var slouching = false
 
     // Puntero y desplazamiento se acumulan y salen una vez por fotograma.
     private var pendingMove = CGVector.zero
@@ -359,6 +365,15 @@ final class Remote: ObservableObject {
             harvests += 1
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             flash("guardado en Fotos y en el portapapeles")
+        case .beat(let strength):
+            guard feelingBeats else { return }
+            Detents.shared.beat(strength)
+            beatCount += 1
+        case .cameraInUse(let busy):
+            cameraInUse = busy
+        case .postureState(let on, let bad):
+            postureOn = on
+            slouching = bad
         case .frontApp(let id, let name):
             frontAppID = id
             frontAppName = name

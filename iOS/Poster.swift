@@ -99,6 +99,26 @@ struct MusicStage: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .overlay(alignment: .topLeading) {
+                if remote.nowPlaying != nil {
+                    // Sentir la música: cada golpe vibra en la mano.
+                    Button {
+                        Detents.shared.press()
+                        remote.feelingBeats.toggle()
+                        remote.send(.beats(remote.feelingBeats))
+                    } label: {
+                        Image(systemName: "hand.raised.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(remote.feelingBeats ? Tone.onEmber : .white)
+                            .symbolEffect(.bounce, value: remote.beatCount)
+                            .frame(width: Space.tap, height: Space.tap)
+                            .background(Circle().fill(remote.feelingBeats ? Tone.ember : .black.opacity(0.35)))
+                    }
+                    .buttonStyle(PressScale())
+                    .padding(Space.m)
+                    .accessibilityLabel(remote.feelingBeats ? "dejar de sentir la música" : "sentir la música")
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if remote.nowPlaying != nil {
                     Button { share(palette) } label: {

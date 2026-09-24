@@ -19,6 +19,11 @@ final class Server: ObservableObject {
     let photos = PhotoDrop()
     let lights = Lights()
     let liveClass = LiveClass()
+    private let beats = BeatDetector()
+    private var beatListeners: Set<ObjectIdentifier> = []
+    private let posture = PostureCoach()
+    private var cameraBusy = false
+    private var slouching = false
     let macName = Host.current().localizedName ?? "Mac"
 
     /// Clientes que están mirando la pantalla en vivo.
@@ -70,6 +75,27 @@ final class Server: ObservableObject {
         }
         touchBar = TouchBarController(server: self)
         lights.onChange = { [weak self] in self?.broadcastLights() }
+        beats.onBeat = { [weak self] strength in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.hud.pulse(strength)
+                    for key in self.beatListeners { self.reply(key, .beat(strength)) }
+                }
+            }
+        }
+        posture.onState = { [weak self] bad in
+            MainActor.assumeIsolated {
+                guard let self, bad != self.slouching else { return }
+                self.slouching = bad
+                self.broadcast(.postureState(on: true, slouching: bad))
+            }
+        }
+        posture.onAlert = { [weak self] in
+            MainActor.assumeIsolated {
+                self?.hud.showMessage("endereza la espalda", symbol: "figure.stand")
+            }
+        }
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.broadcastFrontApp() }
@@ -172,6 +198,8 @@ final class Server: ObservableObject {
         devices = clients.values.map(\.name)
         watchers[key] = nil
         inFlight.remove(key)
+        beatListeners.remove(key)
+        if beatListeners.isEmpty { Task { await beats.stop() } }
         updateStreaming()
         if clients.isEmpty { laser.setOn(false) }
     }
@@ -384,6 +412,21 @@ final class Server: ObservableObject {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }
 
+        case .blow:
+            let gone = Scatter.toggle()
+            hud.showMessage(gone ? "escritorio despejado" : "todo de vuelta", symbol: "wind")
+
+        case .beats(let on):
+            if on { beatListeners.insert(key) } else { beatListeners.remove(key) }
+            Task { @MainActor in
+                if self.beatListeners.isEmpty { await self.beats.stop() } else { await self.beats.start() }
+            }
+
+        case .posture(let on):
+            if on { posture.start() } else { posture.stop() }
+            broadcast(.postureState(on: on, slouching: false))
+            hud.showMessage(on ? "cuidando tu postura" : "postura en pausa", symbol: "figure.stand")
+
         case .photo(let data):
             photos.receive(data)
             reply(key, .status("foto recibida en el Mac"))
@@ -508,6 +551,12 @@ final class Server: ObservableObject {
     private func tick() {
         let wasCapture = canCapture
         Input.refreshTrust()
+        // ¿Empezó o terminó una videollamada?
+        let busy = CameraWatcher.inUse
+        if busy != cameraBusy {
+            cameraBusy = busy
+            broadcast(.cameraInUse(busy))
+        }
         canControl = Input.isTrusted
         canCapture = ScreenGrabber.allowed
         if canCapture != wasCapture {

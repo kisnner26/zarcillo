@@ -41,6 +41,12 @@ final class Detents {
         play([transient(0.75 - s * 0.35, 0.45 + s * 0.4)])
     }
 
+    /// Un golpe de la música: fuerte y seco si el golpe es fuerte.
+    func beat(_ strength: Double) {
+        let s = Float(min(1, max(0.2, strength)))
+        play([transient(s, 0.3 + s * 0.4)])
+    }
+
     /// El tope: 0 o 100. Un golpe seco y un rebote.
     func wall() {
         play([transient(1, 0.2), transient(0.4, 0.1, at: 0.05)])

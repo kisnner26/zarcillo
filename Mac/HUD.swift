@@ -9,6 +9,8 @@ final class HUD: ObservableObject {
     enum Content: Equatable {
         case level(LevelKind, Double)
         case message(String, symbol: String?, icon: NSImage?)
+        /// Solo las esquinas: un golpe de música o un aviso suave.
+        case pulse(Double)
     }
 
     @Published private(set) var content: Content?
@@ -26,7 +28,13 @@ final class HUD: ObservableObject {
         show(.message(text, symbol: symbol, icon: icon))
     }
 
-    private func show(_ c: Content) {
+    /// Un destello breve de las esquinas. No pisa un aviso que ya esté a la vista.
+    func pulse(_ strength: Double) {
+        if visible, let c = content, case .pulse = c {} else if visible { return }
+        show(.pulse(strength), hold: 0.18)
+    }
+
+    private func show(_ c: Content, hold: TimeInterval = 1.3) {
         content = c
         guard let s = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main
         else { return }
@@ -56,7 +64,7 @@ final class HUD: ObservableObject {
             }
         }
         hideWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + hold, execute: work)
     }
 
     /// Paneles transparentes que no roban clics ni el foco.
@@ -87,6 +95,7 @@ private struct CornerGlow: View {
     var body: some View {
         let strength: Double = {
             if case .level(_, let v)? = hud.content { return 0.4 + 0.4 * v }
+            if case .pulse(let v)? = hud.content { return 0.25 + 0.6 * v }
             return 0.4
         }()
         GeometryReader { geo in
@@ -117,7 +126,7 @@ struct HUDView: View {
                 CompactDial(kind: kind, value: value)
             case .message(let text, let symbol, let icon)?:
                 MessageChip(text: text, symbol: symbol, icon: icon)
-            case nil:
+            case .pulse?, nil:
                 Color.clear
             }
         }
