@@ -1,19 +1,21 @@
 import AppKit
 import SwiftUI
 
-/// Aviso flotante en la esquina superior izquierda, bajo la barra de menús:
-/// el dial de volumen o brillo mientras se gira, o la app que se está abriendo.
+/// Aviso flotante bajo la barra de menús, en la cerámica y el color del iPhone:
+/// la perilla con su zarcillo mientras cambias volumen o brillo, o una pastilla
+/// con lo que acaba de pasar. Entra con un resorte y se va desvaneciéndose.
 @MainActor
 final class HUD: ObservableObject {
-    enum Content {
+    enum Content: Equatable {
         case level(LevelKind, Double)
         case message(String, symbol: String?, icon: NSImage?)
     }
 
     @Published private(set) var content: Content?
+    @Published private(set) var visible = false
     private var panel: NSPanel?
     private var hideWork: DispatchWorkItem?
-    private let size = NSSize(width: 320, height: 190)
+    private let size = NSSize(width: 360, height: 220)
 
     func showLevel(_ kind: LevelKind, _ value: Double) {
         show(.level(kind, value))
@@ -28,17 +30,17 @@ final class HUD: ObservableObject {
         let p = panel ?? makePanel()
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         if let s = screen {
-            p.setFrameOrigin(NSPoint(x: s.frame.minX + 16, y: s.visibleFrame.maxY - size.height - 8))
+            p.setFrameOrigin(NSPoint(x: s.frame.minX + 14, y: s.visibleFrame.maxY - size.height - 6))
         }
-        if !p.isVisible || p.alphaValue < 1 {
-            p.alphaValue = 1
-            p.orderFrontRegardless()
-        }
+        p.orderFrontRegardless()
+        withAnimation(.spring(duration: 0.45, bounce: 0.35)) { visible = true }
+
         hideWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let panel = self?.panel else { return }
-            NSAnimationContext.runAnimationGroup({ $0.duration = 0.35; panel.animator().alphaValue = 0 }) {
-                panel.orderOut(nil)
+            guard let self else { return }
+            withAnimation(.easeOut(duration: 0.35)) { self.visible = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                if !self.visible { self.panel?.orderOut(nil) }
             }
         }
         hideWork = work
@@ -60,9 +62,6 @@ final class HUD: ObservableObject {
     }
 }
 
-/// El acento que eligió el usuario en el iPhone.
-private var glow: Color { Color(nsColor: Accent.nsColor) }
-
 struct HUDView: View {
     @ObservedObject var hud: HUD
 
@@ -70,51 +69,71 @@ struct HUDView: View {
         Group {
             switch hud.content {
             case .level(let kind, let value)?:
-                LevelDial(kind: kind, value: value)
+                LevelKnob(kind: kind, value: value)
             case .message(let text, let symbol, let icon)?:
                 MessagePill(text: text, symbol: symbol, icon: icon)
             case nil:
                 Color.clear
             }
         }
-        .padding(12)
-        .frame(width: 320, height: 190, alignment: .topLeading)
+        .scaleEffect(hud.visible ? 1 : 0.82, anchor: .topLeading)
+        .blur(radius: hud.visible ? 0 : 10)
+        .opacity(hud.visible ? 1 : 0)
+        .padding(16)
+        .frame(width: 360, height: 220, alignment: .topLeading)
     }
 }
 
-private struct LevelDial: View {
+/// La perilla del iPhone, en chico: arco de luz, marcas y el zarcillo que se
+/// enrosca con el valor.
+private struct LevelKnob: View {
     let kind: LevelKind
     let value: Double
-    private let ticks = 36
 
     var body: some View {
-        ZStack {
-            Circle().fill(Color.black.opacity(0.82))
-                .overlay(Circle().stroke(Color.white.opacity(0.08), lineWidth: 1))
-            ForEach(0..<ticks, id: \.self) { i in
-                let t = Double(i) / Double(ticks - 1)
-                let on = t <= value + 0.0001
-                Capsule()
-                    .fill(on ? glow : Color.white.opacity(0.18))
-                    .frame(width: 3, height: i % 5 == 0 ? 13 : 8)
-                    .shadow(color: on ? glow.opacity(0.9) : .clear, radius: 4)
-                    .offset(y: -66)
-                    .rotationEffect(.degrees(135 + 270 * t + 90))
+        HStack(spacing: 16) {
+            ZStack {
+                Ceramic(shape: Circle(), fill: MacTone.recess)
+                Circle()
+                    .trim(from: 0, to: value * 0.75)
+                    .stroke(MacTone.ember, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(135))
+                    .padding(8)
+                    .shadow(color: MacTone.ember.opacity(0.8), radius: 8)
+                ZStack {
+                    Circle().fill(MacTone.ember)
+                    ForEach(0..<20, id: \.self) { i in
+                        Capsule().fill(MacTone.emberDeep)
+                            .frame(width: 2, height: i % 5 == 0 ? 8 : 5)
+                            .offset(y: -34)
+                            .rotationEffect(.degrees(Double(i) * 18))
+                    }
+                    Tendril(tightness: value)
+                        .stroke(MacTone.body, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: 44, height: 44)
+                }
+                .frame(width: 76, height: 76)
+                .overlay(RadialGradient(colors: [.white.opacity(0.35), .clear], center: UnitPoint(x: 0.32, y: 0.26),
+                                        startRadius: 0, endRadius: 34).blendMode(.softLight).clipShape(Circle()))
             }
-            VStack(spacing: 1) {
-                Image(systemName: kind == .volume ? "speaker.wave.2.fill" : "sun.max.fill")
-                    .font(.system(size: 11, weight: .semibold))
+            .frame(width: 112, height: 112)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Label(kind == .volume ? "volumen" : "brillo",
+                      systemImage: kind == .volume ? "speaker.wave.2.fill" : "sun.max.fill")
+                    .font(.system(size: 11, weight: .bold)).textCase(.uppercase).tracking(1.2)
+                    .foregroundStyle(MacTone.ink.opacity(0.55))
                 Text("\(Int((value * 100).rounded()))")
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .font(.system(size: 44, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .foregroundStyle(MacTone.ember)
+                    .contentTransition(.numericText(value: value))
             }
-            .foregroundStyle(.white)
-            .frame(width: 68, height: 68)
-            .background(Circle().stroke(glow, lineWidth: 2).shadow(color: glow, radius: 8))
+            .padding(.trailing, 20)
         }
-        .frame(width: 160, height: 160)
-        .animation(.easeOut(duration: 0.12), value: value)
+        .padding(10)
+        .background(Ceramic(shape: Capsule()).shadow(color: .black.opacity(0.4), radius: 16, y: 8))
+        .animation(.spring(duration: 0.3), value: value)
     }
 }
 
@@ -124,18 +143,25 @@ private struct MessagePill: View {
     let icon: NSImage?
 
     var body: some View {
-        HStack(spacing: 10) {
-            if let icon {
-                Image(nsImage: icon).resizable().frame(width: 34, height: 34)
-            } else if let symbol {
-                Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(glow)
-                    .frame(width: 30)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(MacTone.key)
+                if let icon {
+                    Image(nsImage: icon).resizable().frame(width: 30, height: 30)
+                } else if let symbol {
+                    Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(MacTone.ember)
+                        .symbolEffect(.bounce, value: text)
+                }
             }
-            Text(text).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+            .frame(width: 42, height: 42)
+            Text(text)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(MacTone.ink)
+                .lineLimit(1)
+                .contentTransition(.opacity)
         }
-        .padding(.horizontal, 16).padding(.vertical, 11)
-        .background(Capsule().fill(Color.black.opacity(0.82)))
-        .overlay(Capsule().stroke(glow.opacity(0.35), lineWidth: 1))
-        .shadow(color: glow.opacity(0.25), radius: 10)
+        .padding(.leading, 8).padding(.trailing, 20).padding(.vertical, 8)
+        .background(Ceramic(shape: Capsule()).shadow(color: .black.opacity(0.4), radius: 16, y: 8))
+        .overlay(Capsule().stroke(MacTone.ember.opacity(0.35), lineWidth: 1))
     }
 }

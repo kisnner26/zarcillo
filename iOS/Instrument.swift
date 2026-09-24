@@ -48,11 +48,12 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case brightness, color, gestures, laser, power, routines, shortcuts
+    case photos, brightness, color, gestures, laser, power, routines, shortcuts
     var id: Int { rawValue }
 
     var title: String {
         switch self {
+        case .photos: "fotos"
         case .brightness: "brillo"
         case .color: "color"
         case .gestures: "gestos"
@@ -65,6 +66,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
+        case .photos: "tíralas al Mac como hojas"
         case .brightness: "gira la perilla"
         case .color: "el acento de la app"
         case .gestures: "escritorios y Spotlight"
@@ -77,6 +79,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .photos: "photo.on.rectangle.angled"
         case .brightness: "sun.max"
         case .color: "paintpalette"
         case .gestures: "hand.draw"
@@ -571,32 +574,6 @@ struct Knob: View {
     }
 }
 
-/// Espiral de zarcillo: más vueltas cuanto mayor el valor.
-struct Tendril: Shape {
-    var tightness: Double
-    var animatableData: Double {
-        get { tightness }
-        set { tightness = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let c = CGPoint(x: rect.midX, y: rect.midY)
-        let r = min(rect.width, rect.height) / 2
-        let turns = 0.6 + tightness * 2.4
-        let steps = 160
-        var p = Path()
-        let startAngle = Double.pi * 0.75
-        for i in 0...steps {
-            let t = Double(i) / Double(steps)
-            let a = startAngle - t * turns * 2 * .pi
-            let rr = r * (1 - t * 0.88)
-            let pt = CGPoint(x: c.x + rr * cos(a), y: c.y + rr * sin(a))
-            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
-        }
-        return p
-    }
-}
-
 // MARK: - Apps: brotes en un tallo
 
 struct VineApps: View {
@@ -971,6 +948,7 @@ struct MoreStage: View {
                                               : "gira la perilla para cambiar el brillo")
                     .font(.callout).foregroundStyle(Tone.ink.opacity(0.6))
             }
+        case .photos: TossPage()
         case .color: ColorPage()
         case .gestures: GesturePage()
         case .laser: LaserPage()

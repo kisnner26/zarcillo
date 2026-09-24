@@ -13,6 +13,7 @@ final class Server: ObservableObject {
 
     let hud = HUD()
     let laser = Laser()
+    let photos = PhotoDrop()
     let macName = Host.current().localizedName ?? "Mac"
 
     /// Clientes que están mirando la pantalla en vivo.
@@ -278,7 +279,14 @@ final class Server: ObservableObject {
 
         case .accent(let hex):
             Accent.hex = hex
+            // Todo lo que pinta el Mac lee el acento al dibujarse: el menú se
+            // entera por aquí, el HUD y la Touch Bar en su próximo repintado.
+            objectWillChange.send()
             touchBar?.refresh()
+
+        case .photo(let data):
+            photos.receive(data)
+            reply(key, .status("foto recibida en el Mac"))
         }
     }
 

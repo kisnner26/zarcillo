@@ -68,7 +68,7 @@ struct MusicStage: View {
                     if wide {
                         HStack(spacing: Space.l) {
                             Record(art: remote.artwork, palette: palette, playing: np.playing,
-                                   size: min(geo.size.height - 56, geo.size.width * 0.36))
+                                   size: min(geo.size.height * 0.62, geo.size.width * 0.32))
                             VStack(alignment: .leading, spacing: Space.m) {
                                 meta(np, align: .leading)
                                 progress(np, palette)
@@ -78,10 +78,10 @@ struct MusicStage: View {
                         }
                         .padding(.horizontal, Space.l).padding(.vertical, Space.m)
                     } else {
-                        VStack(spacing: Space.m) {
+                        VStack(spacing: Space.s + 2) {
                             Spacer(minLength: 0)
                             Record(art: remote.artwork, palette: palette, playing: np.playing,
-                                   size: min(geo.size.width * 0.56, geo.size.height * 0.4))
+                                   size: min(geo.size.width * 0.5, geo.size.height * 0.3))
                             meta(np, align: .center)
                             progress(np, palette)
                             controls(np, palette)
@@ -146,7 +146,7 @@ struct MusicStage: View {
             let frac = np.duration > 0 ? pos / np.duration : 0
             VStack(spacing: 6) {
                 GeometryReader { g in
-                    VineProgress(progress: frac, color: palette.vivid,
+                    VineProgress(progress: frac, color: Tone.ember,
                                  phase: np.playing ? tl.date.timeIntervalSinceReferenceDate : 0)
                         .contentShape(Rectangle())
                         .gesture(DragGesture(minimumDistance: 0)
@@ -171,10 +171,10 @@ struct MusicStage: View {
 
     private func controls(_ np: NowPlaying, _ palette: ArtPalette) -> some View {
         HStack(spacing: Space.xl) {
-            button(0, "backward.fill", 20, .previous, fill: .white.opacity(0.12), fg: .white, side: 52)
-            button(1, np.playing ? "pause.fill" : "play.fill", 26, .playPause,
-                   fill: palette.vivid, fg: palette.vividIsLight ? .black.opacity(0.85) : .white, side: 68)
-            button(2, "forward.fill", 20, .next, fill: .white.opacity(0.12), fg: .white, side: 52)
+            button(0, "backward.fill", 18, .previous, fill: .white.opacity(0.12), fg: .white, side: 48)
+            button(1, np.playing ? "pause.fill" : "play.fill", 24, .playPause,
+                   fill: Tone.ember, fg: Tone.onEmber, side: 60)
+            button(2, "forward.fill", 18, .next, fill: .white.opacity(0.12), fg: .white, side: 48)
         }
         .frame(maxWidth: .infinity)
     }
@@ -234,14 +234,18 @@ struct Backdrop: View {
                     .opacity(0.8)
                     .transition(.opacity)
             }
-            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+            // El tema manda: el acento tiñe la carátula para que todo combine.
+            Tone.ember.opacity(0.28).blendMode(.color)
+            Tone.ember.opacity(0.12)
+            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
             Grain(opacity: 0.09)
         }
         .clipped()
     }
 }
 
-/// La carátula con un vinilo que asoma por detrás y gira mientras suena.
+/// La carátula, centrada, con un vinilo que asoma por arriba mientras suena.
+/// Asoma hacia arriba y no a un lado para que la composición quede simétrica.
 struct Record: View {
     let art: UIImage?
     let palette: ArtPalette
@@ -249,19 +253,23 @@ struct Record: View {
     let size: CGFloat
     var animated = true
 
+    /// Cuánto sobresale el vinilo por encima de la carátula.
+    static func peek(_ size: CGFloat) -> CGFloat { size * 0.24 }
+
     var body: some View {
-        ZStack(alignment: .leading) {
-            Vinyl(art: art, size: size * 0.94)
+        ZStack {
+            Vinyl(art: art, size: size * 0.92)
                 .modifier(SpinWhile(on: playing && animated))
-                .offset(x: playing ? size * 0.3 : size * 0.06)
+                .offset(y: playing ? -Record.peek(size) : -size * 0.04)
                 .animation(.spring(duration: 0.8, bounce: 0.25), value: playing)
             cover
                 .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.08, style: .continuous))
-                .shadow(color: palette.vivid.opacity(0.55), radius: size * 0.16, y: size * 0.08)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.07, style: .continuous))
+                .shadow(color: Tone.ember.opacity(0.45), radius: size * 0.14, y: size * 0.07)
                 .shadow(color: .black.opacity(0.45), radius: 6, y: 3)
         }
-        .frame(width: size * 1.3, height: size, alignment: .leading)
+        .frame(width: size, height: size)
+        .padding(.top, Record.peek(size))
     }
 
     @ViewBuilder private var cover: some View {
@@ -270,7 +278,7 @@ struct Record: View {
         } else {
             ZStack {
                 palette.base
-                Image(systemName: "music.note").font(.system(size: size * 0.3)).foregroundStyle(palette.vivid)
+                Image(systemName: "music.note").font(.system(size: size * 0.3)).foregroundStyle(Tone.ember)
             }
         }
     }
@@ -364,42 +372,47 @@ struct StoryPoster: View {
     var body: some View {
         ZStack {
             Backdrop(art: art, palette: palette)
-            VStack(spacing: 26) {
-                Spacer()
-                Record(art: art, palette: palette, playing: true, size: 210, animated: false)
-                    .padding(.leading, 30)
-                VStack(spacing: 8) {
-                    Text(np.title)
-                        .font(.system(size: 32, weight: .bold, design: .serif))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                    Text(np.artist)
-                        .font(.system(size: 18, weight: .medium))
-                        .opacity(0.8)
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 28)
-                VStack(spacing: 6) {
-                    VineProgress(progress: np.duration > 0 ? position / np.duration : 0, color: palette.vivid)
-                        .frame(height: 30)
-                    HStack {
-                        Text(clock(position))
-                        Spacer()
-                        Text(clock(np.duration))
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                VStack(spacing: 30) {
+                    Record(art: art, palette: palette, playing: true, size: 230, animated: false)
+                    VStack(spacing: 8) {
+                        Text(np.title)
+                            .font(.system(size: 34, weight: .bold, design: .serif))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.7)
+                        Text(np.artist)
+                            .font(.system(size: 18, weight: .medium))
+                            .opacity(0.8)
                     }
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 30)
+                    VStack(spacing: 6) {
+                        VineProgress(progress: np.duration > 0 ? position / np.duration : 0, color: Tone.ember)
+                            .frame(height: 30)
+                        HStack {
+                            Text(clock(position))
+                            Spacer()
+                            Text(clock(np.duration))
+                        }
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .frame(width: 250)
                 }
-                .frame(width: 250)
-                Spacer()
-                HStack(spacing: 6) {
-                    Image(systemName: "leaf.fill")
-                    Text("sonando en mi Mac · zarcillo")
+                Spacer(minLength: 0)
+                // Solo la marca.
+                HStack(spacing: 7) {
+                    Image(systemName: "leaf.fill").foregroundStyle(Tone.ember)
+                    Text("zarcillo")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .tracking(1.5)
+                        .foregroundStyle(.white.opacity(0.85))
                 }
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.bottom, 30)
+                .padding(.bottom, 34)
             }
+            .padding(.top, 40)
         }
         .frame(width: 360, height: 640)
     }

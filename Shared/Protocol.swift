@@ -233,6 +233,8 @@ enum Command: Codable {
     // Lo que el Mac muestra por su cuenta (Touch Bar, HUD): tus escenas y tu color.
     case syncRoutines([Routine])
     case accent(hex: Int)
+    /// Una foto "tirada" desde el iPhone. Viaja con sus bytes originales (HEIC, JPEG…).
+    case photo(Data)
 }
 
 /// Mac → iPhone.
