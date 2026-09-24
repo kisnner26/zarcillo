@@ -48,6 +48,19 @@ final class VoiceCommander: ObservableObject {
             phase = .idle
             return
         }
+        // Enseñar por demostración, sin pasar por Claude.
+        let low = order.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.whitespaces))
+        if remote.teaching {
+            if ["listo", "termine", "ya termine", "eso es todo", "ya", "guardalo", "guarda"].contains(low) {
+                remote.teachStop(); phase = .idle; return
+            }
+            if low.hasPrefix("cancela") { remote.teachCancel(); phase = .idle; return }
+        }
+        for prefix in ["aprende esto ", "aprende a ", "ensenate ", "aprende "] where low.hasPrefix(prefix) {
+            let name = String(low.dropFirst(prefix.count))
+            if !name.isEmpty { remote.teach(name); phase = .idle; return }
+        }
         phase = .thinking
         Task {
             // Lo básico lo resuelve la gramática al instante. Lo demás va al cerebro del Mac:

@@ -328,6 +328,12 @@ enum Command: Codable {
     case brainForget(intent: String?)
     case brainSettings(claudeOn: Bool)
     case brainInfo
+    /// Enseñar por demostración: el Mac anota apps y atajos hasta `teachStop`.
+    case teachStart(name: String)
+    case teachStop
+    case teachCancel
+    /// Ficha de una planta a partir de lo que Vision vio en la foto.
+    case herbarium(id: String, labels: [String])
     case pressAction(DeckAction)
     /// Mandar al iPhone cada captura de pantalla que se tome en el Mac.
     case screenshotsToPhone(Bool)
@@ -376,6 +382,10 @@ enum Event: Codable {
     case brainResult(id: String, ok: Bool, reply: String, source: String, output: String?, intent: String?)
     case brainSuggest([BrainSuggestion])
     case brainInfo(BrainInfo)
+    /// Carga del procesador (0…1) y si acaba de terminar algo largo.
+    case vitals(cpu: Double, aurora: Bool)
+    case teachState(recording: Bool, steps: Int, saved: String?)
+    case herbCard(HerbCard)
     /// Una captura de pantalla recién tomada en el Mac (PNG o JPEG).
     case screenshot(name: String, data: Data)
     case screenshotsState(Bool)

@@ -143,6 +143,15 @@ final class Remote: ObservableObject {
         dismissBrain()
     }
 
+    func teach(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        send(.teachStart(name: n))
+    }
+
+    func teachStop() { send(.teachStop) }
+    func teachCancel() { send(.teachCancel) }
+
     func dismissBrain() { withAnimation(.easeOut(duration: 0.25)) { brain = .idle } }
 
     /// La tarjeta del resultado se va sola, salvo que haya algo pendiente.
@@ -217,6 +226,12 @@ final class Remote: ObservableObject {
     /// El cerebro (Claude + lo aprendido): lo que se ve en la tarjeta de arriba.
     @Published private(set) var brain: BrainState = .idle
     @Published private(set) var brainInfo: BrainInfo?
+    /// Carga del procesador del Mac (0…1) y hasta cuándo dura la aurora de "terminó algo largo".
+    @Published private(set) var cpu = 0.0
+    @Published private(set) var auroraUntil = Date.distantPast
+    /// Enseñar por demostración: el Mac está mirando y anotando pasos.
+    @Published private(set) var teaching = false
+    @Published private(set) var teachSteps = 0
     @Published private(set) var suggestions: [BrainSuggestion] = []
     /// Botones de la app que está al frente en el Mac (sus menús, lo esencial, lo más usado).
     @Published private(set) var appActions: AppActions?
@@ -558,6 +573,15 @@ final class Remote: ObservableObject {
             suggestions = list
         case .brainInfo(let info):
             brainInfo = info
+        case .vitals(let load, let aurora):
+            cpu = load
+            if aurora, auroraUntil < Date() { auroraUntil = Date().addingTimeInterval(20) }
+        case .teachState(let recording, let steps, let saved):
+            teaching = recording
+            teachSteps = steps
+            if let saved { flash("aprendí “\(saved)”"); UINotificationFeedbackGenerator().notificationOccurred(.success) }
+        case .herbCard(let card):
+            HerbStore.shared.complete(card)
         case .screenshotsState(let on):
             screenshotsOn = on
         case .screenshot(let name, let data):

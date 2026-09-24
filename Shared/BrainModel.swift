@@ -76,6 +76,22 @@ struct BrainIntentInfo: Codable, Equatable, Identifiable {
     var steps: [String]
     /// Segundos desde 1970 de su último uso; el jardín marchita lo que no usas.
     var lastUsed: Double? = nil
+    /// Si es un injerto: los ids de las dos órdenes que une.
+    var graft: [String]? = nil
+}
+
+/// La ficha de una planta real fotografiada con el iPhone.
+struct HerbCard: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var scientific: String
+    var water: String
+    var light: String
+    var tip: String
+    var labels: [String]
+    /// Tono (0…1) de la foto, para dibujarla con su color en el jardín.
+    var hue: Double = 0.3
+    var date: Double = Date().timeIntervalSince1970
 }
 
 struct BrainSuggestion: Codable, Equatable, Identifiable {

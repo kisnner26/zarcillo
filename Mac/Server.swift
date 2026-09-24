@@ -31,6 +31,9 @@ final class Server: ObservableObject {
     let mixer = Mixer()
     let deck = DeckEngine()
     let brain = Brain()
+    let aura = Aura()
+    let vitals = Vitals()
+    let teacher = Teacher()
     let shots = ScreenshotWatcher()
     @Published private(set) var sendScreenshots = true
     /// Estado de los permisos de macOS; el menú y el iPhone lo muestran.
@@ -86,6 +89,14 @@ final class Server: ObservableObject {
                 if self?.touchBar?.isShowing == true { self?.touchBar?.refresh() }
             }
         }
+        Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let v = self.vitals.sample()
+                if !self.clients.isEmpty { self.broadcast(.vitals(cpu: v.cpu, aurora: v.aurora)) }
+            }
+        }
+        teacher.onChange = { [weak self] rec, n, saved in self?.broadcast(.teachState(recording: rec, steps: n, saved: saved)) }
         touchBar = TouchBarController(server: self)
         lights.onChange = { [weak self] in self?.broadcastLights() }
         beats.onBeat = { [weak self] strength in
@@ -589,6 +600,29 @@ final class Server: ObservableObject {
         case .brainSettings(let on):
             brain.setClaude(on)
             reply(key, .brainInfo(brain.info()))
+
+        case .teachStart(let name):
+            teacher.start(name: name)
+            hud.showMessage("te miro: haz lo que quieres enseñar", symbol: "record.circle")
+
+        case .teachStop:
+            if let (name, steps) = teacher.stop(), !steps.isEmpty {
+                brain.addTaught(name: name, steps: steps)
+                hud.showMessage("aprendí: \(name)", symbol: "leaf.fill")
+                broadcast(.teachState(recording: false, steps: steps.count, saved: name))
+                reply(key, .brainInfo(brain.info()))
+            } else {
+                broadcast(.teachState(recording: false, steps: 0, saved: nil))
+            }
+
+        case .teachCancel:
+            teacher.cancel()
+
+        case .herbarium(let id, let labels):
+            Task { @MainActor in
+                let card = await self.brain.herbCard(id: id, labels: labels)
+                self.reply(key, .herbCard(card))
+            }
 
         case .brainInfo:
             Task { @MainActor in

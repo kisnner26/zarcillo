@@ -50,7 +50,7 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, photos, send, scan, shots, garden, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
+    case classes, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
     var id: Int { rawValue }
 
     var title: String {
@@ -59,6 +59,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .brain: "cerebro"
         case .shots: "capturas"
         case .garden: "jardín"
+        case .herbarium: "herbario"
         case .layers: "capas"
         case .permissions: "permisos"
         case .detach: "desprender"
@@ -91,6 +92,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .brain: "Claude y lo que va aprendiendo"
         case .shots: "las del Mac, reveladas al llegar"
         case .garden: "lo que aprendió, hecho planta"
+        case .herbarium: "fotografía una planta y guarda su ficha"
         case .layers: "las ventanas del Mac en 3D"
         case .permissions: "lo que el Mac te deja usar"
         case .detach: "una ventana del Mac en tu mano"
@@ -123,6 +125,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .brain: "brain.head.profile"
         case .shots: "camera.viewfinder"
         case .garden: "camera.macro"
+        case .herbarium: "leaf.circle"
         case .layers: "square.3.layers.3d"
         case .permissions: "checkmark.shield"
         case .detach: "macwindow.badge.plus"
@@ -192,7 +195,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
         case .security: [.guardian, .near, .guest]
-        case .custom: [.garden, .brain, .routines, .shortcuts, .touchBar, .color, .permissions]
+        case .custom: [.garden, .herbarium, .brain, .routines, .shortcuts, .touchBar, .color, .permissions]
         }
     }
 }
@@ -263,6 +266,7 @@ struct Instrument: View {
         .overlay { HarvestFall() }
         .overlay(alignment: .top) { VoiceOverlay(voice: voice).padding(.top, Space.s) }
         .overlay(alignment: .top) { BrainOverlay().padding(.top, Space.s) }
+        .overlay { AuraEdge() }
         .fullScreenCover(isPresented: $callLight) { CallLight(shown: $callLight) }
         .overlay {
             if let a = remote.alarm {
@@ -1268,6 +1272,7 @@ struct MoreStage: View {
         case .brain: BrainPage()
         case .shots: ShotsPage()
         case .garden: GardenPage()
+        case .herbarium: HerbariumPage()
         case .layers: LayersPage()
         case .permissions: PermissionsPage()
         case .detach: DetachPage()

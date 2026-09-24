@@ -115,11 +115,14 @@ final class Brain {
         var lastUsed = Date()
         var contexts: [String: Int] = [:]
         var next: [String: Int] = [:]
+        /// Un injerto une dos órdenes que haces siempre seguidas.
+        var graftOf: [String]? = nil
+        var title: String? = nil
 
         var fixed: Bool { ok >= 2 }
         var trusted: Bool { riskyConfirms >= 2 }
         var slots: [String] { template.compactMap { $0.hasPrefix("{") ? String($0.dropFirst().dropLast()) : nil } }
-        var display: String { template.joined(separator: " ") }
+        var display: String { title ?? template.joined(separator: " ") }
     }
 
     private struct Saved: Codable {
@@ -178,7 +181,7 @@ final class Brain {
                   intents: intents.sorted { $0.uses > $1.uses }.map {
                       BrainIntentInfo(id: $0.id, template: $0.display, uses: $0.uses, fixed: $0.fixed,
                                       trusted: $0.trusted, steps: $0.steps.map(\.label),
-                                      lastUsed: $0.lastUsed.timeIntervalSince1970)
+                                      lastUsed: $0.lastUsed.timeIntervalSince1970, graft: $0.graftOf)
                   },
                   claudeReady: claudeReady, claudeOn: claudeOn, claudePlan: claudePlan)
     }
@@ -219,6 +222,7 @@ final class Brain {
             return
         }
         emit(.brainThinking(id: id))
+        server?.aura.show(.thinking)
         Task {
             do {
                 let (plan, template) = try await askClaude(clean, id: id, context: context)
@@ -233,6 +237,7 @@ final class Brain {
                 proceed(id)
             } catch {
                 await refreshClaude()
+                server?.aura.show(.done(false))
                 emit(.brainResult(id: id, ok: false, reply: error.localizedDescription, source: "claude", output: nil, intent: nil))
             }
         }
@@ -241,7 +246,10 @@ final class Brain {
     /// Ejecuta ya, o espera el permiso del usuario si hay pasos con riesgo.
     private func proceed(_ id: String) {
         guard let p = pending[id] else { return }
-        if p.plan.needsConfirm { p.emit(.brainPlan(p.plan)) } else { run(id) }
+        if p.plan.needsConfirm {
+            server?.aura.show(.confirm)
+            p.emit(.brainPlan(p.plan))
+        } else { run(id) }
     }
 
     func confirm(_ id: String, ok: Bool) {
@@ -250,6 +258,7 @@ final class Brain {
             run(id, confirmed: true)
         } else {
             pending[id] = nil
+            server?.aura.hide()
             p.emit(.brainResult(id: id, ok: false, reply: "cancelado", source: p.plan.source, output: nil, intent: p.intent))
         }
     }
@@ -277,6 +286,7 @@ final class Brain {
 
     private func run(_ id: String, confirmed: Bool = false) {
         guard let p = pending.removeValue(forKey: id) else { return }
+        server?.aura.show(.thinking)
         Task {
             let output = await execute(p.plan.steps)
             let failed = output.failures > 0
@@ -289,17 +299,22 @@ final class Brain {
                     intents[i].lastUsed = Date()
                     intents[i].contexts[p.context, default: 0] += 1
                     if confirmed && p.plan.steps.contains(where: \.risky) { intents[i].riskyConfirms += 1 }
+                    for part in intents[i].graftOf ?? [] {
+                        if let k = intents.firstIndex(where: { $0.id == part }) { intents[k].uses += 1; intents[k].lastUsed = Date() }
+                    }
                 } else if p.plan.source == "claude" {
                     intentID = learn(p)
                 }
                 if let prev = last, let now = intentID, prev.id != now, Date().timeIntervalSince(prev.at) < 600,
                    let pi = intents.firstIndex(where: { $0.id == prev.id }) {
                     intents[pi].next[now, default: 0] += 1
+                    graft(prev.id, now)
                 }
                 if let now = intentID { last = (now, Date()) }
             }
             save()
 
+            server?.aura.show(.done(!failed))
             var reply = p.reply
             if let text = output.text, !text.isEmpty { reply = reply.replacingOccurrences(of: "{salida}", with: text) }
             reply = reply.replacingOccurrences(of: "{salida}", with: "")
@@ -360,6 +375,52 @@ final class Brain {
         return intent.id
     }
 
+    /// Dos órdenes sin huecos que haces seguidas tres veces se unen en una planta con dos ramas.
+    private func graft(_ a: String, _ b: String) {
+        let id = "graft:\(a)+\(b)"
+        guard !intents.contains(where: { $0.id == id }),
+              let x = intents.first(where: { $0.id == a }), let y = intents.first(where: { $0.id == b }),
+              x.slots.isEmpty, y.slots.isEmpty, x.graftOf == nil, y.graftOf == nil,
+              (x.next[b] ?? 0) >= 3 else { return }
+        var g = Intent(id: id, template: [], reply: "Listo: \(x.display) y \(y.display)", steps: x.steps + y.steps)
+        g.ok = 1
+        g.graftOf = [a, b]
+        g.title = "\(x.display) → \(y.display)"
+        intents.append(g)
+        server?.hud.showMessage("injerto nuevo", symbol: "leaf.arrow.triangle.circlepath")
+    }
+
+    /// Una orden que el usuario enseñó haciéndola: queda fija desde el primer momento.
+    func addTaught(name: String, steps: [BrainStep]) {
+        var pattern = Self.tokens(name).map(\.norm)
+        if !Self.validPattern(pattern) { pattern = name.lowercased().split(separator: " ").map(String.init) }
+        var i = Intent(id: "taught-\(UUID().uuidString.prefix(8))", template: pattern, reply: "Listo: \(name)", steps: steps)
+        i.ok = 2
+        intents.append(i)
+        save()
+    }
+
+    /// Ficha de planta a partir de las etiquetas de Vision. Si Claude no responde, queda una ficha mínima.
+    func herbCard(id: String, labels: [String]) async -> HerbCard {
+        var card = HerbCard(id: id, name: labels.first?.capitalized ?? "Planta", scientific: "", water: "", light: "", tip: "", labels: labels)
+        guard claudeOn, !labels.isEmpty else { return card }
+        let schema = """
+        {"type":"object","properties":{"name":{"type":"string"},"scientific":{"type":"string"},"water":{"type":"string"},\
+        "light":{"type":"string"},"tip":{"type":"string"}},"required":["name","scientific","water","light","tip"]}
+        """
+        let system = "Eres un botánico. Recibes etiquetas que un modelo de visión puso a la foto de una planta y devuelves una ficha breve en español: nombre común más probable, nombre científico (vacío si no estás seguro), riego, luz y un consejo de cuidado (cada uno una frase corta). Si las etiquetas no parecen una planta, pon en name 'No parece una planta'. No inventes certeza: si es ambiguo, dilo en el consejo."
+        if let a = try? await ClaudeCLI.ask(system: system, prompt: labels.joined(separator: ", "), schema: schema) {
+            stats.claudeCalls += 1; stats.tokensIn += a.tokensIn; stats.tokensOut += a.tokensOut
+            card.name = (a.json["name"] as? String) ?? card.name
+            card.scientific = (a.json["scientific"] as? String) ?? ""
+            card.water = (a.json["water"] as? String) ?? ""
+            card.light = (a.json["light"] as? String) ?? ""
+            card.tip = (a.json["tip"] as? String) ?? ""
+            save()
+        }
+        return card
+    }
+
     /// Lo que sueles pedir después de esto (y lo que sueles pedir con esta app al frente).
     private func suggestions(after intentID: String?, context: String) -> [BrainSuggestion] {
         var scored: [String: Int] = [:]
@@ -378,7 +439,7 @@ final class Brain {
 
     private func bestMatch(_ toks: [(orig: String, norm: String)], context: String) -> (Intent, [String: String])? {
         var best: (Intent, [String: String], Int)?
-        for i in intents where i.ok >= 1 {
+        for i in intents where i.ok >= 1 && i.graftOf == nil {
             guard let caps = Self.match(i.template, toks) else { continue }
             let score = i.ok * 2 + (i.contexts[context] ?? 0) - i.slots.count
             if best == nil || score > best!.2 { best = (i, caps, score) }

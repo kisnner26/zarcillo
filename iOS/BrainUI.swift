@@ -138,6 +138,7 @@ struct BrainOverlay: View {
 struct BrainPage: View {
     @EnvironmentObject private var remote: Remote
     @State private var text = ""
+    @State private var lesson = ""
 
     var body: some View {
         StageScroll(spacing: Space.m) {
@@ -163,6 +164,8 @@ struct BrainPage: View {
                 .buttonStyle(PressScale())
                 .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+
+            teachCard
 
             ToggleCard(title: "usar Claude", detail: "para lo que el grafo todavía no sabe",
                        isOn: Binding(get: { info?.claudeOn ?? true }, set: { remote.send(.brainSettings(claudeOn: $0)) }))
@@ -209,6 +212,66 @@ struct BrainPage: View {
             Hint("Las órdenes que Claude resuelve y se pueden repetir se guardan aquí, solo en tu Mac, y la próxima vez se resuelven sin gastar tu plan. Lo que lleva AppleScript o comandos de terminal siempre te pide permiso.")
         }
         .task { remote.send(.brainInfo) }
+    }
+
+    /// Enseñar por demostración: el Mac mira lo que haces y lo guarda como orden.
+    @ViewBuilder
+    private var teachCard: some View {
+        if remote.teaching {
+            VStack(spacing: Space.s) {
+                HStack(spacing: 10) {
+                    Circle().fill(Color(red: 0.95, green: 0.3, blue: 0.3)).frame(width: 12, height: 12)
+                        .symbolEffect(.pulse)
+                        .opacity(0.9)
+                    Text("mirando el Mac · \(remote.teachSteps) paso\(remote.teachSteps == 1 ? "" : "s")")
+                        .font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Spacer(minLength: 0)
+                }
+                Text("Abre las apps y usa los atajos (⌘ o ⌃) que quieras enseñar. No anoto lo que escribes.")
+                    .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.55)).frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: Space.s) {
+                    teachButton("cancelar", filled: false) { remote.teachCancel() }
+                    teachButton("terminé", filled: true) { remote.teachStop() }
+                }
+            }
+            .padding(Space.m)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color(red: 0.95, green: 0.3, blue: 0.3).opacity(0.5), lineWidth: 1))
+        } else {
+            HStack(spacing: 8) {
+                TextField("enseñar una orden nueva…", text: $lesson)
+                    .font(.system(size: 15)).foregroundStyle(Tone.ink)
+                    .padding(.horizontal, 14).frame(height: 46)
+                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+                    .submitLabel(.go)
+                    .onSubmit(startLesson)
+                Button(action: startLesson) {
+                    Image(systemName: "record.circle").font(.system(size: 18, weight: .bold)).foregroundStyle(Tone.onEmber)
+                        .frame(width: 46, height: 46).background(Circle().fill(Tone.ember))
+                }
+                .buttonStyle(PressScale())
+                .disabled(lesson.trimmingCharacters(in: .whitespaces).isEmpty)
+                .accessibilityLabel("empezar a enseñar")
+            }
+        }
+    }
+
+    private func startLesson() {
+        remote.teach(lesson)
+        lesson = ""
+    }
+
+    private func teachButton(_ title: String, filled: Bool, _ run: @escaping () -> Void) -> some View {
+        Button {
+            Detents.shared.press()
+            run()
+        } label: {
+            Text(title).font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(filled ? Tone.onEmber : Tone.ink.opacity(0.8))
+                .frame(maxWidth: .infinity).frame(height: 44)
+                .background(Capsule().fill(filled ? Tone.ember : Tone.recess))
+        }
+        .buttonStyle(PressScale())
     }
 
     private func status(_ info: BrainInfo?) -> String {
