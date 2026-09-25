@@ -113,23 +113,26 @@ struct ToggleCard: View {
 struct HeroMark: View {
     let symbol: String
     @Environment(\.accessibilityReduceMotion) private var reduce
+    @State private var spin = false
 
     var body: some View {
         ZStack {
-            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
-                let t = reduce ? 0 : tl.date.timeIntervalSinceReferenceDate
-                ZStack {
-                    ForEach(0..<10, id: \.self) { k in
-                        LeafShape().fill(Tone.moss.opacity(k % 2 == 0 ? 0.55 : 0.3))
-                            .frame(width: 7, height: 13)
-                            .offset(y: -60)
-                            .rotationEffect(.degrees(Double(k) * 36 + t * 4))
-                    }
+            ZStack {
+                ForEach(0..<10, id: \.self) { k in
+                    LeafShape().fill(Tone.moss.opacity(k % 2 == 0 ? 0.55 : 0.3))
+                        .frame(width: 7, height: 13)
+                        .offset(y: -60)
+                        .rotationEffect(.degrees(Double(k) * 36))
                 }
             }
+            .rotationEffect(.degrees(spin ? 360 : 0))
             Circle().fill(.clear).glass(48).frame(width: 96, height: 96)
             Image(systemName: symbol).font(.system(size: 36, weight: .regular))
         }
         .frame(width: 132, height: 132)
+        .onAppear {
+            guard !reduce else { return }
+            withAnimation(.linear(duration: 90).repeatForever(autoreverses: false)) { spin = true }
+        }
     }
 }

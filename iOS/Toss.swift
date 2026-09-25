@@ -90,7 +90,7 @@ struct TossPage: View {
                 .font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.5))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, Space.xl)
-            if loading { ProgressView().tint(Tone.ember) }
+            if loading { WaitingDots() }
         }
     }
 

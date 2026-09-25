@@ -13,6 +13,7 @@ struct ZarcilloApp: App {
                 .preferredColorScheme(.dark)
                 .buttonStyle(PressScale())
                 .scrollDismissesKeyboard(.interactively)
+                .toggleStyle(LeafToggleStyle())
                 // En cualquier campo de texto, un "Listo" sobre el teclado lo cierra.
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {

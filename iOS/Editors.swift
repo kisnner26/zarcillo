@@ -359,7 +359,7 @@ struct StepPicker: View {
                         VStack(spacing: Space.s) {
                             HStack {
                                 Image(systemName: "speaker.fill").foregroundStyle(Tone.ink.opacity(0.5))
-                                Slider(value: $level, in: 0...1).tint(Tone.ember)
+                                VineSlider(value: $level, in: 0...1)
                                 Text("\(Int(level * 100)) %").font(.system(size: 13, weight: .bold))
                                     .monospacedDigit().foregroundStyle(Tone.ember).frame(width: 48)
                             }
@@ -367,7 +367,7 @@ struct StepPicker: View {
                                 chip("volumen", filled: false) { pick(.volume(level)) }
                                 chip("brillo", filled: false) { pick(.brightness(level)) }
                             }
-                            Stepper(value: $seconds, in: 1...30) {
+                            LeafStepper(value: $seconds, range: 1...30) {
                                 Text("esperar \(Int(seconds)) s").font(.system(size: 15)).foregroundStyle(Tone.ink)
                             }
                             chip("agregar espera", filled: false) { pick(.wait(seconds)) }

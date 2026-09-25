@@ -250,10 +250,9 @@ struct NearPage: View {
             if remote.nearOn {
                 HStack {
                     Text("cerca").font(.system(size: 12, weight: .semibold))
-                    Slider(value: Binding(get: { Double(-remote.nearThreshold) },
-                                          set: { remote.setNear(true, threshold: -Int($0)) }),
-                           in: 50...95, step: 1)
-                        .tint(Tone.ember)
+                    VineSlider(value: Binding(get: { Double(-remote.nearThreshold) },
+                                              set: { remote.setNear(true, threshold: -Int($0)) }),
+                               in: 50...95, step: 1)
                     Text("lejos").font(.system(size: 12, weight: .semibold))
                 }
                 .foregroundStyle(Tone.ink.opacity(0.6))

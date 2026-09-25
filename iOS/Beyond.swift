@@ -362,7 +362,7 @@ struct GazePage: View {
                     }
                     HStack {
                         Text("fino").font(.system(size: 12, weight: .semibold))
-                        Slider(value: $reach, in: 6...24).tint(Tone.ember)
+                        VineSlider(value: $reach, in: 6...24)
                             .onChange(of: reach) { _, r in gaze.reach = r }
                         Text("amplio").font(.system(size: 12, weight: .semibold))
                     }

@@ -14,7 +14,7 @@ struct LightsPage: View {
                         SectionLabel(text: "intensidad")
                         HStack(spacing: Space.s) {
                             Image(systemName: "sun.min.fill").foregroundStyle(Tone.ink.opacity(0.5))
-                            Slider(value: Binding(get: { remote.lightsBrightness },
+                            VineSlider(value: Binding(get: { remote.lightsBrightness },
                                                   set: { remote.lightsBrightness = $0 }),
                                    in: 0.05...1,
                                    onEditingChanged: { editing in

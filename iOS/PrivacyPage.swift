@@ -37,8 +37,7 @@ struct PrivacyPage: View {
                     Text(strength < 0.4 ? "suave" : strength < 0.75 ? "media" : "fuerte")
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ember)
                 }
-                Slider(value: $strength, in: 0.2...1) { editing in if !editing { resend() } }
-                    .tint(Tone.ember)
+                VineSlider(value: $strength, in: 0.2...1) { editing in if !editing { resend() } }
             }
             .padding(Space.m)
             .glass(22)

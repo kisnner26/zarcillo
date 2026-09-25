@@ -826,7 +826,7 @@ struct VineApps: View {
                 .scrollIndicators(.hidden)
             }
             if remote.apps.isEmpty {
-                ProgressView().tint(Tone.ember).padding(.bottom, 40)
+                WaitingDots().padding(.bottom, 40)
             }
             RoutineStrip().padding(.bottom, Space.s)
         }
@@ -1064,6 +1064,8 @@ struct ShortcutSheet: View {
 // MARK: - Más: un tallo vertical
 
 struct MoreStage: View {
+    /// El icono de la ficha vuela a la cabecera al abrir la función (y vuelve al cerrar).
+    @Namespace private var hero
     @EnvironmentObject private var remote: Remote
     @EnvironmentObject private var deck: Deck
 
@@ -1082,6 +1084,7 @@ struct MoreStage: View {
                         }
                         Spacer(minLength: 0)
                         Image(systemName: open.symbol).font(.system(size: 17)).foregroundStyle(open.group.hue.opacity(0.9))
+                            .matchedGeometryEffect(id: open, in: hero)
                             .frame(width: 36, height: 36)
                     }
                     .padding(.horizontal, Space.m).padding(.top, Space.m).padding(.bottom, Space.s)
@@ -1177,6 +1180,7 @@ struct MoreStage: View {
             CenteredGrid(minimum: 96, maxColumns: 4, spacing: Space.s) {
                 ForEach(items) { item in
                     tile(item, group: group, index: all.firstIndex(of: item) ?? 0).id(item)
+                        .modifier(Cascade(index: all.firstIndex(of: item) ?? 0))
                 }
             }
         }
@@ -1198,6 +1202,7 @@ struct MoreStage: View {
                     Image(systemName: item.symbol).font(.system(size: 19, weight: .regular))
                         .foregroundStyle(on ? Tone.ember : group.hue)
                         .symbolEffect(.pulse, isActive: on)
+                        .matchedGeometryEffect(id: item, in: hero)
                     Spacer(minLength: 0)
                     Text(number).font(Typo.catalog(10)).foregroundStyle(Tone.ink.opacity(0.35))
                 }
@@ -1461,7 +1466,7 @@ struct DeckStage: View {
             }
         } else if let a, !a.scanned {
             HStack(spacing: 8) {
-                ProgressView().tint(Tone.ember)
+                WaitingDots()
                 Text("leyendo los menús…").font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
             }
         } else if remote.permissions[.accessibility] == .denied {
@@ -1634,5 +1639,26 @@ extension Remote {
             guard let s = permissions[kind] else { return false }
             return PermissionEntry(kind: kind, state: s).needsAttention
         }
+    }
+}
+
+
+/// Entrada en cascada: cada ficha aparece un instante después de la anterior,
+/// subiendo apenas. Da la sensación de que el invernadero "brota".
+struct Cascade: ViewModifier {
+    let index: Int
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 12)
+            .scaleEffect(shown ? 1 : 0.96)
+            .onAppear {
+                guard !shown else { return }
+                if reduce { shown = true; return }
+                withAnimation(.spring(duration: 0.5, bounce: 0.2).delay(min(0.6, Double(index) * 0.025))) { shown = true }
+            }
     }
 }

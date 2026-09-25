@@ -57,11 +57,10 @@ struct Glass: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .background(
-                ZStack {
-                    shape.fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
-                    shape.fill(LinearGradient(colors: [Color.white.opacity(0.07), tint.opacity(0.10), Color.white.opacity(0.02)],
-                                              startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
+                // Sin desenfoque propio: las fichas ya viven sobre el escenario de vidrio, y
+                // decenas de desenfoques a la vez pesaban mucho en la GPU.
+                shape.fill(LinearGradient(colors: [Color.white.opacity(0.085), tint.opacity(0.10), Color.white.opacity(0.03)],
+                                          startPoint: .topLeading, endPoint: .bottomTrailing))
             )
             .overlay(
                 shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.06), .white.opacity(0.10)],
@@ -80,7 +79,7 @@ struct Glow: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 12, paused: reduce || ProcessInfo.processInfo.isLowPowerModeEnabled)) { tl in
             let t = Float(reduce ? 0 : tl.date.timeIntervalSinceReferenceDate)
             let warm = Tone.ember.opacity(0.30 + 0.05 * Double(sin(t * 0.7)))
             let moon = Color(red: 0.16, green: 0.26, blue: 0.23)
@@ -105,26 +104,31 @@ struct Glow: View {
 }
 
 /// Sombras de hojas grandes y difusas que se mecen despacio, como luz entre plantas.
+/// Se dibujan una sola vez (con su desenfoque); el vaivén es solo una transformación.
 struct LeafShadows: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
+    @State private var sway = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
-            let t = reduce ? 0 : tl.date.timeIntervalSinceReferenceDate
-            Canvas { ctx, size in
-                ctx.addFilter(.blur(radius: 22))
-                for k in 0..<9 {
-                    let fx = (Double(k) * 0.37).truncatingRemainder(dividingBy: 1)
-                    let fy = (Double(k) * 0.23 + 0.05).truncatingRemainder(dividingBy: 0.55)
-                    let sway = sin(t * 0.35 + Double(k) * 1.3) * 10
-                    var c = ctx
-                    c.translateBy(x: fx * size.width + sway, y: fy * size.height)
-                    c.rotate(by: .degrees(Double(k) * 41 + sin(t * 0.3 + Double(k)) * 6))
-                    let h = size.width * (0.28 + 0.12 * ((Double(k) * 0.61).truncatingRemainder(dividingBy: 1)))
-                    c.fill(LeafShape().path(in: CGRect(x: -h * 0.28, y: -h / 2, width: h * 0.56, height: h)),
-                           with: .color(.black.opacity(0.22)))
-                }
+        Canvas { ctx, size in
+            ctx.addFilter(.blur(radius: 22))
+            for k in 0..<9 {
+                let fx = (Double(k) * 0.37).truncatingRemainder(dividingBy: 1)
+                let fy = (Double(k) * 0.23 + 0.05).truncatingRemainder(dividingBy: 0.55)
+                var c = ctx
+                c.translateBy(x: fx * size.width, y: fy * size.height)
+                c.rotate(by: .degrees(Double(k) * 41))
+                let h = size.width * (0.28 + 0.12 * ((Double(k) * 0.61).truncatingRemainder(dividingBy: 1)))
+                c.fill(LeafShape().path(in: CGRect(x: -h * 0.28, y: -h / 2, width: h * 0.56, height: h)),
+                       with: .color(.black.opacity(0.22)))
             }
+        }
+        .drawingGroup()
+        .rotationEffect(.degrees(sway ? 1.6 : -1.6), anchor: .top)
+        .offset(x: sway ? 8 : -8)
+        .onAppear {
+            guard !reduce else { return }
+            withAnimation(.easeInOut(duration: 7).repeatForever(autoreverses: true)) { sway = true }
         }
         .allowsHitTesting(false)
     }
