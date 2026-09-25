@@ -57,6 +57,9 @@ struct GamePage: View {
     @AppStorage("game.mode") private var mode: GameMode = .pad
     @AppStorage("game.layout") private var layout: GameLayout = .arrows
     @AppStorage("game.feel") private var feel = true
+    @AppStorage("game.aim") private var aimOn = false
+    @AppStorage("game.aimSpeed") private var aimSpeed = 0.5
+    @AppStorage("game.aimInvert") private var aimInvert = false
     @State private var playing = false
 
     var body: some View {
@@ -76,6 +79,26 @@ struct GamePage: View {
                 }
             }
             ToggleCard(title: "sentir el juego", detail: "el iPhone vibra con los golpes y explosiones que suenan en el Mac", isOn: $feel)
+
+            if mode == .pad {
+                ToggleCard(title: "apuntar con el giroscopio", detail: "mueve el iPhone y la mira del Mac lo sigue; aparecen gatillos para disparar y apuntar", isOn: $aimOn)
+                if aimOn {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("sensibilidad").font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
+                            Spacer()
+                            Text(aimSpeed < 0.35 ? "fina" : aimSpeed < 0.7 ? "media" : "rápida")
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ember)
+                        }
+                        VineSlider(value: $aimSpeed, in: 0...1)
+                    }
+                    .padding(Space.m)
+                    .glass(22)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    ToggleCard(title: "invertir arriba y abajo", detail: "como en los juegos de avión", isOn: $aimInvert)
+                        .transition(.opacity)
+                }
+            }
 
             Button {
                 Detents.shared.press()
@@ -126,10 +149,30 @@ struct GameController: View {
     let layout: GameLayout
     let feel: Bool
     @StateObject private var keys = GameKeys()
+    @StateObject private var aim = GyroAim()
+    @AppStorage("game.aim") private var aimOn = false
+    @AppStorage("game.aimSpeed") private var aimSpeed = 0.5
+    @AppStorage("game.aimInvert") private var aimInvert = false
+    /// Si iOS no gira la pantalla, el mando se gira solo; y hacia qué lado lo sostienes.
+    @State private var selfTurn = false
+    @AppStorage("game.turnLeft") private var turnLeft = false
 
     var body: some View {
-        ForceLandscape(fullBleed: true) { pad }
-            .background(Tone.body.ignoresSafeArea())
+        GeometryReader { g in
+            let portrait = g.size.height > g.size.width
+            let turn = selfTurn && portrait
+            pad
+                .frame(width: turn ? g.size.height : g.size.width, height: turn ? g.size.width : g.size.height)
+                .rotationEffect(.degrees(turn ? (turnLeft ? -90 : 90) : 0))
+                .position(x: g.size.width / 2, y: g.size.height / 2)
+                .animation(.spring(duration: 0.5, bounce: 0.2), value: turnLeft)
+        }
+        .ignoresSafeArea()
+        .background(Tone.body.ignoresSafeArea())
+    }
+
+    private var sceneIsPortrait: Bool {
+        (UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.interfaceOrientation.isPortrait) ?? true
     }
 
     private var pad: some View {
@@ -137,7 +180,7 @@ struct GameController: View {
             ZStack {
                 background
                 if mode == .pad {
-                    PadLayout(layout: layout, keys: keys, size: geo.size)
+                    PadLayout(layout: layout, keys: keys, size: geo.size, aiming: aimOn, remote: remote)
                 } else {
                     WheelLayout(layout: layout, keys: keys, size: geo.size)
                 }
@@ -150,11 +193,20 @@ struct GameController: View {
         .onAppear {
             keys.remote = remote
             Orientation.request(.landscape)
+            // Si en un segundo iOS no giró (giro bloqueado, Duplicación del iPhone), se gira el mando.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+                if sceneIsPortrait { withAnimation(.spring(duration: 0.5)) { selfTurn = true } }
+            }
+            if aimOn && mode == .pad {
+                aim.remote = remote
+                aim.start(speed: aimSpeed, invert: aimInvert)
+            }
             UIApplication.shared.isIdleTimerDisabled = true
             if feel { remote.send(.beats(true)) }
         }
         .onDisappear {
             keys.releaseAll()
+            aim.stop()
             if feel { remote.send(.beats(false)) }
             UIApplication.shared.isIdleTimerDisabled = false
             Orientation.request(.allButUpsideDown, restoring: true)
@@ -181,19 +233,35 @@ struct GameController: View {
 
     private var topBar: some View {
         HStack(spacing: Space.s) {
+            if selfTurn {
+                roundButton("rotate.left", "voltear el mando") { turnLeft.toggle() }
+            }
             GameButton(label: "select", key: "escape", keys: keys, style: .pill)
             Button {
                 Detents.shared.press()
                 dismiss()
             } label: {
-                GlyphView(.close, size: 17).foregroundStyle(Tone.ink.opacity(0.8))
-                    .frame(width: 44, height: 44).background(Circle().fill(Tone.key))
-                    .overlay(Circle().stroke(Tone.stroke, lineWidth: 1))
+                GlyphView(.close, size: 17).foregroundStyle(Tone.ink.opacity(0.85))
+                    .frame(width: 44, height: 44).glass(22)
             }
             .accessibilityLabel("salir del mando")
             GameButton(label: "start", key: "return", keys: keys, style: .pill)
+            if aimOn && mode == .pad {
+                roundButton("scope", "centrar la mira") { aim.recenter() }
+            }
         }
         .padding(.top, 14)
+    }
+
+    private func roundButton(_ symbol: String, _ label: String, _ run: @escaping () -> Void) -> some View {
+        Button {
+            Detents.shared.press()
+            run()
+        } label: {
+            Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.85))
+                .frame(width: 44, height: 44).glass(22)
+        }
+        .accessibilityLabel(label)
     }
 }
 
@@ -226,11 +294,13 @@ struct GameButton: View {
     @ViewBuilder private var content: some View {
         switch style {
         case .face(let tint):
-            Text(label).font(.system(size: 24, weight: .heavy, design: .rounded))
+            Text(label).font(.system(size: 24, weight: .semibold, design: .serif))
                 .foregroundStyle(pressed ? Tone.onEmber : tint)
                 .frame(width: 72, height: 72)
-                .background(Circle().fill(pressed ? Tone.ember : Tone.key))
-                .overlay(Circle().stroke(pressed ? Tone.ember : tint.opacity(0.45), lineWidth: 2))
+                .background {
+                    if pressed { Circle().fill(Tone.ember) } else { Circle().fill(.clear).glass(36, tint: tint) }
+                }
+                .overlay(Circle().strokeBorder(pressed ? Tone.ember : tint.opacity(0.55), lineWidth: 1.5))
                 .shadow(color: pressed ? Tone.ember.opacity(0.7) : .black.opacity(0.4), radius: pressed ? 16 : 8, y: pressed ? 0 : 4)
         case .pill:
             Text(label).font(.system(size: 12, weight: .bold, design: .rounded)).textCase(.uppercase).tracking(1)
@@ -259,6 +329,8 @@ private struct PadLayout: View {
     let layout: GameLayout
     @ObservedObject var keys: GameKeys
     let size: CGSize
+    var aiming = false
+    var remote: Remote? = nil
 
     var body: some View {
         let stick = min(size.height * 0.62, 200)
@@ -278,6 +350,47 @@ private struct PadLayout: View {
         }
         .frame(maxHeight: .infinity)
         .padding(.top, 30)
+        .overlay(alignment: .topLeading) {
+            if aiming, let remote { Trigger(title: "apuntar", symbol: "scope", kind: .aim, remote: remote).padding(.leading, 24).padding(.top, 70) }
+        }
+        .overlay(alignment: .topTrailing) {
+            if aiming, let remote { Trigger(title: "disparar", symbol: "flame.fill", kind: .fire, remote: remote).padding(.trailing, 24).padding(.top, 70) }
+        }
+    }
+}
+
+/// Gatillo: "disparar" mantiene el clic del ratón mientras lo pisas; "apuntar" es el clic derecho.
+private struct Trigger: View {
+    enum Kind { case fire, aim }
+    let title: String
+    let symbol: String
+    let kind: Kind
+    let remote: Remote
+    @State private var down = false
+
+    var body: some View {
+        Label(title, systemImage: symbol)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(down ? Tone.onEmber : Tone.ink.opacity(0.9))
+            .padding(.horizontal, 18).frame(height: 46)
+            .background {
+                if down { Capsule().fill(Tone.ember) } else { Capsule().fill(.clear).glass(23, tint: Tone.ember) }
+            }
+            .scaleEffect(down ? 0.94 : 1)
+            .animation(.spring(duration: 0.15), value: down)
+            .contentShape(Capsule())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !down else { return }
+                    down = true
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    if kind == .fire { remote.send(.press(down: true)) } else { remote.send(.click(button: .right)) }
+                }
+                .onEnded { _ in
+                    down = false
+                    if kind == .fire { remote.send(.press(down: false)) }
+                })
+            .accessibilityLabel(title)
     }
 }
 
@@ -470,4 +583,47 @@ private struct SteeringWheel: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
     }
+}
+
+
+// MARK: - Apuntar con el giroscopio
+
+/// Mueve el cursor del Mac con el giro del iPhone: girar a los lados mueve en
+/// horizontal (el giro alrededor de la vertical real) y cabecear, en vertical.
+@MainActor
+final class GyroAim: ObservableObject {
+    weak var remote: Remote?
+    private let motion = CMMotionManager()
+    private var speed = 0.5
+    private var invert = false
+    private var paused = false
+
+    func start(speed: Double, invert: Bool) {
+        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
+        self.speed = speed
+        self.invert = invert
+        motion.deviceMotionUpdateInterval = 1 / 90
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
+            guard let self, let m, !self.paused else { return }
+            let g = m.gravity, r = m.rotationRate
+            // Giro alrededor de la vertical del mundo (lados) y alrededor del eje largo de la pantalla (arriba/abajo).
+            let yaw = r.x * g.x + r.y * g.y + r.z * g.z
+            let pitch = abs(g.x) > abs(g.y) ? r.y * (g.x > 0 ? 1 : -1) : r.x
+            let k = 6 + 38 * self.speed
+            var dx = -yaw * k
+            var dy = -pitch * k * (self.invert ? -1 : 1)
+            // Zona muerta: el pulso de la mano no mueve la mira.
+            if abs(dx) < 0.4 { dx = 0 }
+            if abs(dy) < 0.4 { dy = 0 }
+            if dx != 0 || dy != 0 { self.remote?.move(dx: dx, dy: dy) }
+        }
+    }
+
+    /// Pausa un instante para que vuelvas a sujetar el iPhone derecho sin mover la mira.
+    func recenter() {
+        paused = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.paused = false }
+    }
+
+    func stop() { motion.stopDeviceMotionUpdates() }
 }
