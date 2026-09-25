@@ -29,7 +29,7 @@ struct ClassesPage: View {
                 .foregroundStyle(Tone.ink)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16).frame(height: 52)
-                .background(Capsule().fill(Tone.key))
+                .glass(26)
                 .disabled(speech.running)
 
             HStack(spacing: Space.s) {

@@ -193,31 +193,29 @@ struct KeyboardBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
-                    ForEach(keys, id: \.1) { label, name in
-                        Button {
-                            Haptic.tap()
-                            remote.send(.key(name: name))
-                        } label: {
-                            Text(label).font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(minWidth: 44, minHeight: 36)
-                                .padding(.horizontal, 4)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(Tone.key))
-                        }
-                        .buttonStyle(PressScale())
+            // Las teclas especiales, en una fila pareja que llena el ancho.
+            HStack(spacing: 5) {
+                ForEach(keys, id: \.1) { label, name in
+                    Button {
+                        Haptic.tap()
+                        remote.send(.key(name: name))
+                    } label: {
+                        Text(label).font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Tone.ink.opacity(0.9))
+                            .frame(maxWidth: .infinity).frame(height: 36)
+                            .glass(10)
                     }
+                    .buttonStyle(PressScale())
                 }
             }
-            .scrollIndicators(.hidden)
 
             HStack(spacing: 10) {
-                Image(systemName: "keyboard").foregroundStyle(.white.opacity(0.7))
+                Image(systemName: "keyboard").font(.system(size: 14)).foregroundStyle(Tone.ember)
                 TextField("escribe o dicta… aparece en el Mac", text: $text)
                     .focused($focused)
-                    .foregroundStyle(.white)
-                    .tint(.white)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Tone.ink)
+                    .tint(Tone.ember)
                     .autocorrectionDisabled(false)
                     .submitLabel(.return)
                     .onSubmit {
@@ -228,15 +226,18 @@ struct KeyboardBar: View {
                     }
                     .onChange(of: text) { _, new in sync(new) }
                 Button {
+                    focused = false
                     withAnimation(.spring(duration: 0.35)) { shown = false }
                 } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 22)).foregroundStyle(.white.opacity(0.7))
+                    Text("listo").font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.onEmber)
+                        .padding(.horizontal, 12).frame(height: 30)
+                        .background(Capsule().fill(Tone.ember))
                 }
+                .buttonStyle(PressScale())
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(Capsule().fill(Tone.key))
+            .padding(.leading, 14).padding(.trailing, 6).frame(height: 46)
+            .glass(23)
         }
-        .padding(.horizontal, 12).padding(.bottom, 8)
         .onAppear { focused = true }
     }
 

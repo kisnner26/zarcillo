@@ -141,8 +141,7 @@ struct TossPage: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Tone.ink.opacity(0.85))
                     .padding(.horizontal, Space.m).frame(height: Space.tap)
-                    .background(Capsule().fill(Tone.key))
-                    .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
+                    .glass(24)
             }
             Spacer()
             // La de arriba, a la mano del reloj: se lanza al Mac con la muñeca.
@@ -155,7 +154,7 @@ struct TossPage: View {
                 Image(systemName: "applewatch.radiowaves.left.and.right")
                     .font(.system(size: 16, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.85))
                     .frame(width: Space.tap, height: Space.tap)
-                    .background(Circle().fill(Tone.key))
+                    .glass(Space.tap / 2)
                     .overlay(Circle().stroke(Tone.stroke, lineWidth: 1))
             }
             .buttonStyle(PressScale())

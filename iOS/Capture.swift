@@ -44,26 +44,7 @@ struct ScanPage: View {
     }
 
     private func option(_ title: String, _ symbol: String, _ detail: String, action: @escaping () -> Void) -> some View {
-        Button {
-            Detents.shared.press()
-            action()
-        } label: {
-            CeramicCard {
-                HStack(spacing: Space.m) {
-                    Image(systemName: symbol).font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(Tone.onEmber)
-                        .frame(width: 60, height: 60)
-                        .background(Circle().fill(Tone.ember))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(title).font(.system(size: 17, weight: .bold)).foregroundStyle(Tone.ink)
-                        Text(detail).font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.55))
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-        .buttonStyle(PressScale())
+        ActionCard(symbol: symbol, title: title, detail: detail, action: action)
     }
 
     private func closeButton(_ action: @escaping () -> Void) -> some View {
@@ -142,62 +123,67 @@ struct SendPage: View {
 
     var body: some View {
         StageScroll(spacing: Space.l) {
-                Button {
-                    Detents.shared.press()
-                    importing = true
-                } label: {
-                    CeramicCard {
-                        HStack(spacing: Space.m) {
-                            Image(systemName: "doc.badge.arrow.up.fill").font(.system(size: 26, weight: .semibold))
-                                .foregroundStyle(Tone.onEmber)
-                                .frame(width: 60, height: 60).background(Circle().fill(Tone.ember))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("archivo al bolsillo").font(.system(size: 17, weight: .bold))
-                                    .foregroundStyle(Tone.ink)
-                                Text("PDF, audio, video, lo que sea: cae en el Mac y lo arrastras a donde quieras.")
-                                    .font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.55))
-                                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
+            VStack(spacing: Space.s) {
+                ActionCard(symbol: "doc.badge.arrow.up", title: "archivo",
+                           detail: "PDF, audio, video, lo que sea: cae en el Mac y lo arrastras a donde quieras.") { importing = true }
+                ActionCard(symbol: "safari", title: "la pestaña del Mac",
+                           detail: "La página que tienes abierta en el Mac, aquí en el iPhone.") { remote.send(.pullTab) }
+            }
+
+            VStack(spacing: Space.s) {
+                SectionLabel(text: "abrir un link en el Mac")
+                // Campo y botones en una sola pieza de vidrio.
+                HStack(spacing: 6) {
+                    Image(systemName: "link").font(.system(size: 14)).foregroundStyle(Tone.ember).padding(.leading, 14)
+                    TextField("https://…", text: $link)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .submitLabel(.go).onSubmit(openLink)
+                        .font(.system(size: 15)).foregroundStyle(Tone.ink).tint(Tone.ember)
+                    Button {
+                        Haptic.tap()
+                        link = UIPasteboard.general.url?.absoluteString ?? UIPasteboard.general.string ?? link
+                    } label: {
+                        Image(systemName: "doc.on.clipboard").font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Tone.ink.opacity(0.75)).frame(width: 38, height: 38)
                     }
-                }
-                .buttonStyle(PressScale())
-
-                WideButton(title: "traer la pestaña del Mac", symbol: "safari", filled: false) {
-                    remote.send(.pullTab)
-                }
-
-                VStack(spacing: Space.s) {
-                    SectionLabel(text: "abrir un link en el Mac")
-                    HStack(spacing: Space.s) {
-                        TextField("https://…", text: $link)
-                            .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                            .font(.system(size: 15)).foregroundStyle(Tone.ink)
-                            .padding(.horizontal, 14).frame(height: 48)
-                            .background(Capsule().fill(Tone.key))
-                        pill("pegar") { link = UIPasteboard.general.url?.absoluteString ?? UIPasteboard.general.string ?? link }
-                        pill("abrir", filled: true) {
-                            remote.send(.openURL(link.contains("://") ? link : "https://" + link))
-                            link = ""
-                        }
-                        .disabled(link.isEmpty)
+                    .accessibilityLabel("pegar")
+                    Button(action: openLink) {
+                        Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold)).foregroundStyle(Tone.onEmber)
+                            .frame(width: 38, height: 38).background(Circle().fill(Tone.ember))
                     }
+                    .buttonStyle(PressScale())
+                    .disabled(link.isEmpty).opacity(link.isEmpty ? 0.45 : 1)
+                    .accessibilityLabel("abrir en el Mac")
+                    .padding(.trailing, 5)
                 }
+                .frame(height: 50)
+                .glass(25)
+            }
 
-                VStack(spacing: Space.s) {
-                    SectionLabel(text: "escribir texto donde está el cursor")
+            VStack(spacing: Space.s) {
+                SectionLabel(text: "escribir donde está el cursor")
+                ZStack(alignment: .bottomTrailing) {
                     TextField("un párrafo, un correo, una dirección…", text: $text, axis: .vertical)
-                        .lineLimit(3...6)
-                        .font(.system(size: 15)).foregroundStyle(Tone.ink)
-                        .padding(14)
-                        .glass(18)
-                    WideButton(title: "escribir en el Mac", symbol: "keyboard") {
+                        .lineLimit(4...8)
+                        .font(.system(size: 15)).foregroundStyle(Tone.ink).tint(Tone.ember)
+                        .padding(14).padding(.trailing, 44)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        Detents.shared.press()
                         remote.send(.type(text: text))
                         text = ""
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down").font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Tone.onEmber)
+                            .frame(width: 38, height: 38).background(Circle().fill(Tone.ember))
                     }
-                    .disabled(text.isEmpty)
-                    .opacity(text.isEmpty ? 0.5 : 1)
+                    .buttonStyle(PressScale())
+                    .disabled(text.isEmpty).opacity(text.isEmpty ? 0.45 : 1)
+                    .accessibilityLabel("escribir en el Mac")
+                    .padding(8)
                 }
+                .glass(20)
+            }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
@@ -211,6 +197,13 @@ struct SendPage: View {
                 remote.send(.file(name: url.lastPathComponent, data: data))
             }
         }
+    }
+
+    private func openLink() {
+        guard !link.isEmpty else { return }
+        Detents.shared.press()
+        remote.send(.openURL(link.contains("://") ? link : "https://" + link))
+        link = ""
     }
 
     private func pill(_ title: String, filled: Bool = false, action: @escaping () -> Void) -> some View {

@@ -61,6 +61,70 @@ final class BlowDetector: ObservableObject {
     }
 }
 
+/// Soplar sin interruptor: mantén pulsado y sopla. El micrófono solo escucha
+/// mientras el dedo está puesto. En el Mac, el soplido despeja el escritorio (y otro
+/// soplido lo devuelve todo).
+struct BlowHold: View {
+    @EnvironmentObject private var remote: Remote
+    @StateObject private var blow = BlowDetector()
+    @State private var holding = false
+    @State private var blows = 0
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(holding ? Tone.ember : Color.white.opacity(0.08))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.14), lineWidth: 0.8))
+                    .scaleEffect(1 + (holding ? blow.level * 0.25 : 0))
+                Image(systemName: "wind").font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(holding ? Tone.onEmber : Tone.ember)
+                    .symbolEffect(.bounce, value: blows)
+            }
+            .frame(width: 48, height: 48)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(holding ? "sopla ahora" : "Soplar").font(Typo.title(18)).foregroundStyle(Tone.ink)
+                Text(holding ? "despeja el escritorio del Mac" : "mantén pulsado y sopla al micrófono")
+                    .font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.55))
+            }
+            Spacer(minLength: 0)
+            // El nivel del soplido, como hierba que se dobla con el viento.
+            HStack(alignment: .bottom, spacing: 3) {
+                ForEach(0..<7, id: \.self) { k in
+                    Capsule().fill(Tone.moss.opacity(0.8))
+                        .frame(width: 3, height: 8 + CGFloat(holding ? blow.level : 0) * CGFloat(14 + k * 3))
+                        .rotationEffect(.degrees(holding ? blow.level * 25 : 0), anchor: .bottom)
+                }
+            }
+            .frame(height: 36, alignment: .bottom)
+            .animation(.spring(duration: 0.15), value: blow.level)
+        }
+        .padding(14)
+        .glass(22, tint: holding ? Tone.ember : Tone.moss)
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Tone.ember.opacity(holding ? 0.8 : 0), lineWidth: 1.2))
+        .scaleEffect(holding ? 0.985 : 1)
+        .animation(.spring(duration: 0.3), value: holding)
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                guard !holding else { return }
+                holding = true
+                Detents.shared.press()
+                blow.onBlow = {
+                    blows += 1
+                    Detents.shared.wall()
+                    remote.send(.blow)
+                }
+                Task { await blow.start() }
+            }
+            .onEnded { _ in
+                holding = false
+                blow.stop()
+            })
+        .onDisappear { blow.stop() }
+        .accessibilityLabel("Soplar: mantén pulsado y sopla al micrófono")
+    }
+}
+
 struct BlowCard: View {
     @EnvironmentObject private var remote: Remote
     @StateObject private var blow = BlowDetector()

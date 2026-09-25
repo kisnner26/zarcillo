@@ -211,7 +211,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
 
     var items: [MoreItem] {
         switch self {
-        case .mac: [.game, .layers, .detach, .mixer, .compass, .gaze, .laser, .gestures, .power, .brightness]
+        case .mac: [.game, .detach, .mixer, .gaze, .laser, .gestures, .power, .brightness]
         case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
         case .security: [.privacy, .guardian, .near, .guest]
@@ -962,6 +962,10 @@ struct PadStage: View {
                 Trackpad(remote: remote)
             }
 
+            if typing {
+                KeyboardBar(shown: $typing)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
             // Cuatro teclas grabadas, con aire entre ellas.
             HStack(spacing: Space.s + 2) {
                 key("keyboard", "teclado", 0) { withAnimation(.spring(duration: 0.4, bounce: 0.25)) { typing = true } }
@@ -975,13 +979,11 @@ struct PadStage: View {
                 .simultaneousGesture(TapGesture().onEnded { Haptic.tap(); bumps[2] += 1 })
                 key("cursorarrow.click.2", "clic der.", 3) { remote.send(.click(button: .right)) }
             }
-        }
-        .padding(Space.m)
-        .overlay(alignment: .bottom) {
-            if typing {
-                KeyboardBar(shown: $typing).transition(.move(edge: .bottom).combined(with: .opacity))
+            .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .padding(Space.m)
+        .animation(.spring(duration: 0.4, bounce: 0.2), value: typing)
         .sheet(isPresented: $shortcuts) {
             ShortcutSheet().environmentObject(remote)
         }
@@ -1133,6 +1135,8 @@ struct MoreStage: View {
                             .scrollIndicators(.hidden)
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
+                        // Soplar: siempre a mano, sin interruptor.
+                        BlowHold()
                         ForEach(MoreItem.groups(touchBar: remote.hasTouchBar), id: \.group) { section in
                             branch(section.group, section.items, all: all)
                         }
@@ -1144,6 +1148,11 @@ struct MoreStage: View {
                     .frame(maxWidth: .infinity)
                 }
                 .scrollIndicators(.hidden)
+                // Al volver de una función, la lista queda donde estaba: en esa función.
+                .onAppear {
+                    guard all.indices.contains(deck.moreIndex) else { return }
+                    proxy.scrollTo(all[deck.moreIndex], anchor: .center)
+                }
                 // Al girar la perilla, la opción elegida siempre queda a la vista.
                 .onChange(of: deck.moreIndex) { _, i in
                     guard all.indices.contains(i) else { return }

@@ -8,15 +8,18 @@ import UIKit
 struct SectionLabel: View {
     let text: String
     var body: some View {
-        Text(text.uppercased())
-            .font(.system(size: 11, weight: .bold))
-            .tracking(1.4)
-            .foregroundStyle(Tone.ink.opacity(0.45))
-            .frame(maxWidth: .infinity, alignment: .leading)
+        // Etiqueta de herbario: una hoja, el nombre en serif y una línea que se desvanece.
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            LeafShape().fill(Tone.moss).frame(width: 7, height: 11).rotationEffect(.degrees(-25))
+            Text(text.prefix(1).uppercased() + text.dropFirst()).font(Typo.title(15)).foregroundStyle(Tone.ink.opacity(0.9))
+            Rectangle().fill(LinearGradient(colors: [Tone.stroke, .clear], startPoint: .leading, endPoint: .trailing))
+                .frame(height: 1).alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 4 }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// Tarjeta de cerámica.
+/// Tarjeta de vidrio.
 struct CeramicCard<Content: View>: View {
     var radius: CGFloat = 22
     @ViewBuilder var content: Content
@@ -25,14 +28,46 @@ struct CeramicCard<Content: View>: View {
         content
             .padding(Space.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Tone.key))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(LinearGradient(colors: [Tone.ink.opacity(0.12), .black.opacity(0.45)],
-                                             startPoint: .top, endPoint: .bottom), lineWidth: 1))
+            .glass(radius)
     }
 }
 
-/// Botón a lo ancho: lleno con el acento, o grabado en la cerámica.
+/// Una acción principal de una página: icono en una placa de vidrio del acento, el
+/// nombre en serif, qué hace, y una flecha. Todo el cartel se toca.
+struct ActionCard: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            Detents.shared.press()
+            action()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: symbol).font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(Tone.ember)
+                    .frame(width: 52, height: 52)
+                    .glass(16, tint: Tone.ember)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title.prefix(1).uppercased() + title.dropFirst()).font(Typo.title(17)).foregroundStyle(Tone.ink)
+                    Text(detail).font(.system(size: 12.5)).foregroundStyle(Tone.ink.opacity(0.55))
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right").font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Tone.ink.opacity(0.35))
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glass(22)
+        }
+        .buttonStyle(PressScale())
+    }
+}
+
+/// Botón a lo ancho: lleno con el acento (con un filo de luz arriba) o de vidrio.
 struct WideButton: View {
     let title: String
     let symbol: String
@@ -45,12 +80,18 @@ struct WideButton: View {
             action()
         } label: {
             Label(title, systemImage: symbol)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(filled ? Tone.onEmber : Tone.ink.opacity(0.85))
-                .frame(maxWidth: .infinity).frame(height: 54)
-                .background(Capsule().fill(filled ? Tone.ember : Tone.key))
-                .overlay(Capsule().stroke(filled ? .clear : Tone.stroke, lineWidth: 1))
-                .shadow(color: filled ? Tone.ember.opacity(0.4) : .clear, radius: 12)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(filled ? Tone.onEmber : Tone.ink.opacity(0.9))
+                .frame(maxWidth: .infinity).frame(height: 52)
+                .background {
+                    if filled {
+                        Capsule().fill(LinearGradient(colors: [Tone.ember, Tone.emberDeep], startPoint: .top, endPoint: .bottom))
+                            .overlay(Capsule().strokeBorder(LinearGradient(colors: [.white.opacity(0.4), .clear], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                            .shadow(color: Tone.ember.opacity(0.4), radius: 12, y: 4)
+                    } else {
+                        Capsule().fill(.clear).glass(26)
+                    }
+                }
         }
         .buttonStyle(PressScale())
     }
