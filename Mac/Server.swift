@@ -35,6 +35,8 @@ final class Server: ObservableObject {
     let vitals = Vitals()
     let teacher = Teacher()
     let privacy = PrivacyShield()
+    /// Los efectos que hacen ver al iPhone y al Mac como un solo aparato.
+    let bridge = Bridge()
     let shots = ScreenshotWatcher()
     @Published private(set) var sendScreenshots = true
     /// Estado de los permisos de macOS; el menú y el iPhone lo muestran.
@@ -251,6 +253,7 @@ final class Server: ObservableObject {
             switch command {
             case .click(let button):
                 if Input.isTrusted { Input.queue.async { Input.click(button) } }
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.bridge.click() } }
             case .press(let down):
                 if Input.isTrusted { Input.queue.async { Input.press(down: down) } }
             case .gameKey(let name, let down):
@@ -259,6 +262,8 @@ final class Server: ObservableObject {
                 Input.queue.async { Input.releaseAll() }
             case .tapScreen(let x, let y, let button):
                 if Input.isTrusted { Input.queue.async { ScreenGrabber.tap(x: x, y: y, button: button) } }
+                // Después del clic, cuando el cursor ya está en su sitio.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { MainActor.assumeIsolated { self?.bridge.click() } }
             default:
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(command, from: key) } }
             }
@@ -267,6 +272,7 @@ final class Server: ObservableObject {
     }
 
     private func drop(_ key: ObjectIdentifier) {
+        if clients[key] != nil { bridge.disconnected() }
         clients[key] = nil
         Input.queue.async { Input.releaseAll() }
         devices = clients.values.map(\.name)
@@ -293,6 +299,7 @@ final class Server: ObservableObject {
         switch command {
         case .hello(let device):
             clients[key]?.name = device
+            bridge.connected()
             devices = clients.values.map(\.name)
             reply(key, .welcome(mac: macName, volume: Volume.get(), brightness: Brightness.get(), canControl: Input.isTrusted))
             reply(key, .apps(Apps.dock()))
@@ -362,10 +369,12 @@ final class Server: ObservableObject {
             }
 
         case .type(let text):
+            bridge.typed()
             guard allowed(key) else { return }
             Typing.type(text)
 
         case .key(let name):
+            bridge.typed()
             guard allowed(key) else { return }
             Typing.key(named: name)
 

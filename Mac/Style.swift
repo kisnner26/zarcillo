@@ -1,14 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// La misma cerámica del iPhone, para que el Mac se vea como el mismo aparato.
+/// El mismo invernadero de noche que el iPhone: verde casi negro, vidrio con filo
+/// de luz y texto blanco frío, para que el Mac y el iPhone se vean como un solo aparato.
 enum MacTone {
-    static let ink = Color(red: 0.96, green: 0.91, blue: 0.86)
-    static let body = Color(red: 0.106, green: 0.078, blue: 0.067)
-    static let recess = Color(red: 0.07, green: 0.051, blue: 0.043)
-    static let key = Color(red: 0.165, green: 0.125, blue: 0.11)
-    static let stroke = Color(red: 0.23, green: 0.17, blue: 0.145)
-    static let leaf = Color(red: 0.62, green: 0.85, blue: 0.62)
+    static let ink = Color(red: 0.93, green: 0.95, blue: 0.92)
+    static let body = Color(red: 0.035, green: 0.062, blue: 0.052)
+    static let recess = Color(red: 0.05, green: 0.085, blue: 0.072)
+    static let key = Color.white.opacity(0.07)
+    static let stroke = Color.white.opacity(0.11)
+    static let leaf = Color(red: 0.55, green: 0.86, blue: 0.62)
+    static let moss = Color(red: 0.36, green: 0.62, blue: 0.48)
     /// El acento que eligió el usuario en el iPhone.
     static var ember: Color { Color(nsColor: Accent.nsColor) }
     static var emberDeep: Color { Color(nsColor: Accent.nsColor).mix(with: .black, by: 0.28) }
@@ -16,7 +18,7 @@ enum MacTone {
     static var onEmber: Color {
         let h = Accent.hex
         let lum = 0.2126 * Double((h >> 16) & 0xFF) / 255 + 0.7152 * Double((h >> 8) & 0xFF) / 255 + 0.0722 * Double(h & 0xFF) / 255
-        return lum > 0.45 ? body : ink
+        return lum > 0.45 ? Color(red: 0.04, green: 0.06, blue: 0.05) : .white
     }
 }
 
@@ -46,7 +48,8 @@ struct MacGrain: View {
     }
 }
 
-/// Superficie de cerámica con borde de luz arriba y sombra abajo.
+/// Superficie de vidrio con filo de luz arriba (antes cerámica; mismo nombre para no
+/// tocar a quien la usa).
 struct Ceramic<S: InsettableShape>: View {
     let shape: S
     var fill: Color = MacTone.body
@@ -54,9 +57,34 @@ struct Ceramic<S: InsettableShape>: View {
     var body: some View {
         ZStack {
             shape.fill(fill)
-            MacGrain(opacity: 0.06).clipShape(shape)
-            shape.strokeBorder(LinearGradient(colors: [MacTone.ink.opacity(0.14), .black.opacity(0.5)],
-                                              startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            shape.fill(LinearGradient(colors: [Color.white.opacity(0.07), .clear, Color.white.opacity(0.02)],
+                                      startPoint: .topLeading, endPoint: .bottomTrailing))
+            shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.06), .white.opacity(0.1)],
+                                              startPoint: .top, endPoint: .bottom), lineWidth: 0.8)
+        }
+    }
+}
+
+/// Interruptor de hoja, igual al del iPhone.
+struct MacLeafToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.label
+            Spacer(minLength: 0)
+            ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(configuration.isOn ? AnyShapeStyle(LinearGradient(colors: [MacTone.ember, MacTone.emberDeep], startPoint: .top, endPoint: .bottom))
+                                             : AnyShapeStyle(Color.white.opacity(0.1)))
+                    .overlay(Capsule().strokeBorder(.white.opacity(configuration.isOn ? 0.25 : 0.14), lineWidth: 0.8))
+                Circle().fill(Color.white)
+                    .overlay(LeafShape().fill(configuration.isOn ? MacTone.ember : MacTone.moss)
+                        .frame(width: 6, height: 10).rotationEffect(.degrees(configuration.isOn ? 30 : -150)))
+                    .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+                    .padding(2.5)
+            }
+            .frame(width: 40, height: 24)
+            .contentShape(Capsule())
+            .onTapGesture { withAnimation(.spring(duration: 0.3, bounce: 0.35)) { configuration.isOn.toggle() } }
         }
     }
 }

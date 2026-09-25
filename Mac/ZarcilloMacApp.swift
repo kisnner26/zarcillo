@@ -67,8 +67,10 @@ struct MenuView: View {
         .background(
             ZStack {
                 MacTone.body
-                RadialGradient(colors: [MacTone.ember.opacity(0.18), .clear], center: .bottom, startRadius: 0, endRadius: 320)
-                MacGrain(opacity: 0.06)
+                // Luz de luna arriba, el calor del acento abajo: el mismo cielo del iPhone.
+                LinearGradient(colors: [Color(red: 0.16, green: 0.26, blue: 0.23).opacity(0.55), .clear], startPoint: .top, endPoint: .center)
+                RadialGradient(colors: [MacTone.ember.opacity(0.16), .clear], center: .bottom, startRadius: 0, endRadius: 320)
+                MacGrain(opacity: 0.04)
             }
         )
         .environment(\.colorScheme, .dark)
@@ -82,7 +84,7 @@ struct MenuView: View {
                 Image(systemName: "leaf.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(MacTone.onEmber)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Zarcillo").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(MacTone.ink)
+                Text("Zarcillo").font(.system(size: 19, weight: .semibold, design: .serif)).foregroundStyle(MacTone.ink)
                 Text(status).font(.system(size: 12)).foregroundStyle(MacTone.ink.opacity(0.55)).lineLimit(1)
             }
             Spacer()
@@ -102,7 +104,7 @@ struct MenuView: View {
             HStack(spacing: 6) {
                 ForEach(Array(server.passcode.enumerated()), id: \.offset) { i, ch in
                     Text(String(ch))
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(.system(size: 24, weight: .medium, design: .serif))
                         .foregroundStyle(MacTone.ember)
                         .contentTransition(.numericText())
                         .frame(width: 38, height: 48)
@@ -134,7 +136,7 @@ struct MenuView: View {
             }
             Spacer(minLength: 0)
             Toggle("", isOn: Binding(get: { server.sendScreenshots }, set: { server.setScreenshots($0) }))
-                .labelsHidden().toggleStyle(.switch)
+                .labelsHidden().toggleStyle(MacLeafToggleStyle())
         }
         .padding(12)
         .background(Ceramic(shape: RoundedRectangle(cornerRadius: 16, style: .continuous), fill: MacTone.key))
@@ -192,8 +194,7 @@ struct MenuView: View {
 
             HStack {
                 Toggle("Abrir al iniciar sesión", isOn: $launchAtLogin)
-                    .toggleStyle(.switch)
-                    .tint(MacTone.ember)
+                    .toggleStyle(MacLeafToggleStyle())
                     .font(.system(size: 12))
                     .foregroundStyle(MacTone.ink.opacity(0.75))
                     .onChange(of: launchAtLogin) { _, on in

@@ -171,7 +171,7 @@ private struct CompactDial: View {
 
             // El anillo central.
             ZStack {
-                Circle().fill(Color.black.opacity(0.72))
+                Circle().fill(MacTone.body.opacity(0.88))
                 Circle().stroke(MacTone.ember, lineWidth: 2.5)
                     .shadow(color: MacTone.ember, radius: 8)
                     .shadow(color: MacTone.ember.opacity(0.6), radius: 18)
@@ -217,7 +217,8 @@ private struct MessageChip: View {
                 .lineLimit(1)
         }
         .padding(.leading, 5).padding(.trailing, 14).padding(.vertical, 5)
-        .background(Capsule().fill(Color.black.opacity(0.72)))
+        .background(Capsule().fill(MacTone.body.opacity(0.9)))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 0.8))
         .overlay(Capsule().stroke(MacTone.ember.opacity(0.35), lineWidth: 1))
         .shadow(color: MacTone.ember.opacity(0.35), radius: 12)
         .padding(.top, 8)
