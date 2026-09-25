@@ -323,7 +323,7 @@ struct PosturePage: View {
             .frame(width: side, height: side)
         } controls: {
             Text(status)
-                .font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                .font(.system(size: 19, weight: .bold)).foregroundStyle(Tone.ink)
                 .multilineTextAlignment(.center)
                 .contentTransition(.opacity)
             WideButton(title: remote.postureOn ? "dejar de vigilar" : "vigilar mi postura",

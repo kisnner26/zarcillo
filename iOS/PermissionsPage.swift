@@ -22,7 +22,7 @@ struct PermissionsPage: View {
                 .contentTransition(.symbolEffect(.replace))
             Text(remote.permissions.isEmpty ? "consultando al Mac…"
                  : missing == 0 ? "todo en orden" : missing == 1 ? "falta 1 permiso" : "faltan \(missing) permisos")
-                .font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                .font(.system(size: 19, weight: .bold)).foregroundStyle(Tone.ink)
         }
         .padding(.bottom, Space.s)
     }
@@ -38,7 +38,7 @@ struct PermissionsPage: View {
                 .frame(width: 40, height: 40).background(Circle().fill(Tone.recess))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(kind.title).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text(kind.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
                     if kind.isOptional {
                         Text("opcional").font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.4))
                     }
@@ -62,7 +62,7 @@ struct PermissionsPage: View {
             }
         }
         .padding(Space.s)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+        .glass(20)
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
             .stroke(attention ? Tone.ember.opacity(0.5) : Tone.stroke, lineWidth: 1))
     }

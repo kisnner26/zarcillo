@@ -61,7 +61,7 @@ struct GamePage: View {
 
     var body: some View {
         StageScroll(spacing: Space.m) {
-            Image(systemName: mode.symbol).font(.system(size: 50, weight: .semibold)).foregroundStyle(Tone.ember)
+            HeroMark(symbol: mode.symbol).foregroundStyle(Tone.ember)
                 .contentTransition(.symbolEffect(.replace))
                 .padding(.top, Space.s)
 

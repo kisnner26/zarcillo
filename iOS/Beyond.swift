@@ -30,7 +30,7 @@ struct DetachPage: View {
                         }
                         .padding(Space.m)
                         .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
-                        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+                        .glass(22)
                         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Tone.stroke, lineWidth: 1))
                     }
                     .buttonStyle(PressScale())
@@ -158,7 +158,7 @@ private struct Fader: View {
     var body: some View {
         let v = value ?? app.gain
         VStack(spacing: Space.s) {
-            Text("\(Int(v * 100))").font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
+            Text("\(Int(v * 100))").font(.system(size: 13, weight: .bold).monospacedDigit())
                 .foregroundStyle(Tone.ink.opacity(0.7)).contentTransition(.numericText())
             ZStack(alignment: .bottom) {
                 Capsule().fill(Tone.recess).frame(width: 58, height: height)

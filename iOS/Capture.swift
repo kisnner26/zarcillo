@@ -55,7 +55,7 @@ struct ScanPage: View {
                         .frame(width: 60, height: 60)
                         .background(Circle().fill(Tone.ember))
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(title).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                        Text(title).font(.system(size: 17, weight: .bold)).foregroundStyle(Tone.ink)
                         Text(detail).font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.55))
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
@@ -152,7 +152,7 @@ struct SendPage: View {
                                 .foregroundStyle(Tone.onEmber)
                                 .frame(width: 60, height: 60).background(Circle().fill(Tone.ember))
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("archivo al bolsillo").font(.system(size: 17, weight: .bold, design: .rounded))
+                                Text("archivo al bolsillo").font(.system(size: 17, weight: .bold))
                                     .foregroundStyle(Tone.ink)
                                 Text("PDF, audio, video, lo que sea: cae en el Mac y lo arrastras a donde quieras.")
                                     .font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.55))
@@ -190,7 +190,7 @@ struct SendPage: View {
                         .lineLimit(3...6)
                         .font(.system(size: 15)).foregroundStyle(Tone.ink)
                         .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+                        .glass(18)
                     WideButton(title: "escribir en el Mac", symbol: "keyboard") {
                         remote.send(.type(text: text))
                         text = ""

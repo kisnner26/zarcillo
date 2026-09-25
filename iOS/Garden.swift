@@ -30,25 +30,25 @@ struct GardenPage: View {
 
             if let h = herbs.cards.first(where: { $0.id == picked }) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(h.name).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text(h.name).font(.system(size: 15, weight: .bold)).foregroundStyle(Tone.ink)
                     if !h.water.isEmpty { Text(h.water).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.6)) }
                     if !h.light.isEmpty { Text(h.light).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.6)) }
                     Text("del herbario").font(.system(size: 11, weight: .semibold)).foregroundStyle(Tone.leaf)
                 }
                 .padding(Space.m).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+                .glass(20)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             if let p = intents.first(where: { $0.id == picked }) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(p.template).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text(p.template).font(.system(size: 15, weight: .bold)).foregroundStyle(Tone.ink)
                     Text(p.steps.joined(separator: " · ")).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.55))
                     Text("\(p.uses) uso\(p.uses == 1 ? "" : "s") · " + Self.state(p))
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Tone.ember)
                 }
                 .padding(Space.m).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+                .glass(20)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -75,7 +75,7 @@ struct GardenPage: View {
                 .frame(width: 40, height: 40).background(Circle().fill(Tone.ember))
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(list.count) planta\(list.count == 1 ? "" : "s") marchita\(list.count == 1 ? "" : "s")")
-                    .font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    .font(.system(size: 15, weight: .bold)).foregroundStyle(Tone.ink)
                 Text("hace tiempo que no las usas").font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
             }
             Spacer(minLength: 0)
@@ -86,12 +86,12 @@ struct GardenPage: View {
             Button {
                 prune(list)
             } label: {
-                Text("podar").font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Tone.onEmber)
+                Text("podar").font(.system(size: 14, weight: .bold)).foregroundStyle(Tone.onEmber)
                     .padding(.horizontal, 16).frame(height: 40).background(Capsule().fill(Tone.ember))
             }
         }
         .padding(Space.s)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+        .glass(22)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -112,11 +112,11 @@ struct GardenPage: View {
 
     private func chip(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
-            Text(value).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Tone.ember)
+            Text(value).font(.system(size: 20, weight: .bold)).foregroundStyle(Tone.ember)
             Text(label).font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.5))
         }
         .frame(maxWidth: .infinity).padding(.vertical, Space.s)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+        .glass(18)
     }
 
     /// 0 = fresca, 1 = seca del todo (a los 14 días sin usar).

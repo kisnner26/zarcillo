@@ -84,7 +84,7 @@ struct TossPage: View {
             }
             .buttonStyle(PressScale())
             Text("elige fotos y tíralas al Mac")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Tone.ink)
             Text("desliza cada una hacia arriba: caerá en tu Mac como una hoja")
                 .font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.5))

@@ -3,8 +3,8 @@ import SwiftUI
 /// Medidas que comparten todas las páginas del escenario.
 enum StageMetrics {
     /// Aire arriba para el botón de volver; el mismo abajo, para que quede simétrico.
-    static let edge: CGFloat = 60
-    static let edgeWide: CGFloat = 52
+    static let edge: CGFloat = 22
+    static let edgeWide: CGFloat = 20
     /// El escenario es "ancho" cuando el iPhone está de lado.
     static func wide(_ size: CGSize) -> Bool { size.width > size.height * 1.15 }
 }
@@ -105,5 +105,31 @@ struct ToggleCard: View {
         .tint(Tone.ember)
         .padding(.horizontal, Space.m).frame(minHeight: 64)
         .glass(20)
+    }
+}
+
+/// El emblema al inicio de una página: el símbolo dentro de un medallón de vidrio,
+/// rodeado por una corona de hojas finas que gira muy despacio.
+struct HeroMark: View {
+    let symbol: String
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    var body: some View {
+        ZStack {
+            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
+                let t = reduce ? 0 : tl.date.timeIntervalSinceReferenceDate
+                ZStack {
+                    ForEach(0..<10, id: \.self) { k in
+                        LeafShape().fill(Tone.moss.opacity(k % 2 == 0 ? 0.55 : 0.3))
+                            .frame(width: 7, height: 13)
+                            .offset(y: -60)
+                            .rotationEffect(.degrees(Double(k) * 36 + t * 4))
+                    }
+                }
+            }
+            Circle().fill(.clear).glass(48).frame(width: 96, height: 96)
+            Image(systemName: symbol).font(.system(size: 36, weight: .regular))
+        }
+        .frame(width: 132, height: 132)
     }
 }

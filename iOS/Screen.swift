@@ -24,7 +24,7 @@ struct ScreenPage: View {
                                 zoom = 1
                             } label: {
                                 Text("\(Int((zoom * 100).rounded())) %")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded)).monospacedDigit()
+                                    .font(.system(size: 12, weight: .bold)).monospacedDigit()
                                     .foregroundStyle(Tone.onEmber)
                                     .padding(.horizontal, 10).frame(height: 30)
                                     .background(Capsule().fill(Tone.ember))
@@ -45,7 +45,7 @@ struct ScreenPage: View {
                         withAnimation(.spring(duration: 0.3)) { harvesting.toggle() }
                     } label: {
                         Label { Text(harvesting ? "encierra una zona" : "cosechar") } icon: { GlyphView(.harvest, size: 17) }
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(harvesting ? Tone.onEmber : Tone.ink)
                             .padding(.horizontal, 14).frame(height: Space.tap)
                             .background(Capsule().fill(harvesting ? Tone.ember : Tone.key.opacity(0.9)))
@@ -105,7 +105,7 @@ struct FullScreenMac: View {
                 withAnimation(.spring(duration: 0.3)) { harvesting.toggle() }
             } label: {
                 Label { Text(harvesting ? "encierra una zona" : "cosechar") } icon: { GlyphView(.harvest, size: 17) }
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(harvesting ? Tone.onEmber : .white)
                     .padding(.horizontal, 14).frame(height: 44)
                     .background(Capsule().fill(harvesting ? Tone.ember : .black.opacity(0.55)))
@@ -133,7 +133,7 @@ struct FullScreenMac: View {
                         zoom = 1
                     } label: {
                         Text("\(Int((zoom * 100).rounded())) %")
-                            .font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
+                            .font(.system(size: 13, weight: .bold)).monospacedDigit()
                             .foregroundStyle(Tone.onEmber)
                             .padding(.horizontal, 14).frame(height: 44)
                             .background(Capsule().fill(Tone.ember))
@@ -574,7 +574,7 @@ struct OrientationPage: View {
                             Image(systemName: o.symbol).font(.system(size: 20, weight: .semibold))
                                 .frame(width: 30)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(o.title).font(.system(size: 16, weight: .bold, design: .rounded))
+                                Text(o.title).font(.system(size: 16, weight: .bold))
                                 Text(o.detail).font(.system(size: 12)).opacity(0.7)
                             }
                             Spacer(minLength: 0)

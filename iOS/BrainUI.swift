@@ -14,7 +14,7 @@ struct BrainOverlay: View {
                 card {
                     HStack(spacing: 12) {
                         icon("sparkles", spinning: true)
-                        Text("pensando…").font(.system(size: 16, weight: .semibold, design: .rounded)).foregroundStyle(Tone.ink)
+                        Text("pensando…").font(.system(size: 16, weight: .semibold)).foregroundStyle(Tone.ink)
                     }
                 }
             case .confirm(let plan):
@@ -51,7 +51,7 @@ struct BrainOverlay: View {
             HStack(spacing: 12) {
                 icon("exclamationmark.shield.fill")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("¿lo hago?").font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text("¿lo hago?").font(.system(size: 16, weight: .bold)).foregroundStyle(Tone.ink)
                     Text("“\(plan.utterance)”").font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.55)).lineLimit(2)
                 }
             }
@@ -78,7 +78,7 @@ struct BrainOverlay: View {
             HStack(alignment: .top, spacing: 12) {
                 icon(d.ok ? "checkmark" : "xmark")
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(d.reply).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text(d.reply).font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(d.source == "grafo" ? "lo recordaba · sin gastar Claude" : "Claude")
                         .font(.system(size: 11, weight: .bold)).textCase(.uppercase).tracking(1)
@@ -125,7 +125,7 @@ struct BrainOverlay: View {
             Detents.shared.press()
             run()
         } label: {
-            Text(title).font(.system(size: 15, weight: .bold, design: .rounded))
+            Text(title).font(.system(size: 15, weight: .bold))
                 .foregroundStyle(filled ? Tone.onEmber : Tone.ink.opacity(0.8))
                 .frame(maxWidth: .infinity).frame(height: 46)
                 .background(Capsule().fill(filled ? Tone.ember : Tone.recess))
@@ -145,9 +145,9 @@ struct BrainPage: View {
         StageScroll(spacing: Space.m) {
             let info = remote.brainInfo
             VStack(spacing: 6) {
-                Image(systemName: "brain.head.profile").font(.system(size: 46, weight: .semibold))
+                HeroMark(symbol: "brain.head.profile")
                     .foregroundStyle(info?.claudeReady == true ? Tone.ember : Tone.ink.opacity(0.4))
-                Text(status(info)).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                Text(status(info)).font(.system(size: 17, weight: .bold)).foregroundStyle(Tone.ink)
                     .multilineTextAlignment(.center)
             }
 
@@ -155,7 +155,7 @@ struct BrainPage: View {
                 TextField("escribe una orden…", text: $text, axis: .vertical)
                     .font(.system(size: 15)).foregroundStyle(Tone.ink).lineLimit(1...3)
                     .padding(.horizontal, 14).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+                    .glass(22)
                     .submitLabel(.send)
                     .onSubmit(send)
                 Button(action: send) {
@@ -202,7 +202,7 @@ struct BrainPage: View {
                             }
                         }
                         .padding(Space.s)
-                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+                        .glass(18)
                     }
                     Button("olvidar todo") { remote.send(.brainForget(intent: nil)) }
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.5)).frame(height: 44)
@@ -225,7 +225,7 @@ struct BrainPage: View {
                         .symbolEffect(.pulse)
                         .opacity(0.9)
                     Text("mirando el Mac · \(remote.teachSteps) paso\(remote.teachSteps == 1 ? "" : "s")")
-                        .font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(Tone.ink)
                     Spacer(minLength: 0)
                 }
                 Text("Abre las apps y usa los atajos (⌘ o ⌃) que quieras enseñar. No anoto lo que escribes.")
@@ -236,14 +236,14 @@ struct BrainPage: View {
                 }
             }
             .padding(Space.m)
-            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+            .glass(22)
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color(red: 0.95, green: 0.3, blue: 0.3).opacity(0.5), lineWidth: 1))
         } else {
             HStack(spacing: 8) {
                 TextField("enseñar una orden nueva…", text: $lesson)
                     .font(.system(size: 15)).foregroundStyle(Tone.ink)
                     .padding(.horizontal, 14).frame(height: 46)
-                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+                    .glass(22)
                     .submitLabel(.go)
                     .onSubmit(startLesson)
                 Button(action: startLesson) {
@@ -267,7 +267,7 @@ struct BrainPage: View {
             Detents.shared.press()
             run()
         } label: {
-            Text(title).font(.system(size: 15, weight: .bold, design: .rounded))
+            Text(title).font(.system(size: 15, weight: .bold))
                 .foregroundStyle(filled ? Tone.onEmber : Tone.ink.opacity(0.8))
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .background(Capsule().fill(filled ? Tone.ember : Tone.recess))
@@ -283,11 +283,11 @@ struct BrainPage: View {
 
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
-            Text(value).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Tone.ember)
+            Text(value).font(.system(size: 20, weight: .bold)).foregroundStyle(Tone.ember)
             Text(label).font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.5)).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(.vertical, Space.s)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+        .glass(18)
     }
 
     private func send() {

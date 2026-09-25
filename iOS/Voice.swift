@@ -255,7 +255,7 @@ struct VoiceOverlay: View {
                     .foregroundStyle(Tone.onEmber)
                     .symbolEffect(.variableColor.iterative, isActive: voice.phase == .listening)
                     .frame(width: 40, height: 40).background(Circle().fill(Tone.ember))
-                Text(title).font(.system(size: 16, weight: .semibold, design: .rounded))
+                Text(title).font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Tone.ink).lineLimit(3)
             }
             ForEach(lines, id: \.self) { l in

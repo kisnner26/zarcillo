@@ -45,7 +45,7 @@ struct WideButton: View {
             action()
         } label: {
             Label(title, systemImage: symbol)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(filled ? Tone.onEmber : Tone.ink.opacity(0.85))
                 .frame(maxWidth: .infinity).frame(height: 54)
                 .background(Capsule().fill(filled ? Tone.ember : Tone.key))
@@ -92,7 +92,7 @@ struct RoutineList: View {
                     }
                 } label: {
                     Label("nueva escena", systemImage: "plus")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Tone.ember)
                         .frame(maxWidth: .infinity).frame(height: 64)
                         .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -118,7 +118,7 @@ struct RoutineList: View {
                 .frame(width: 52, height: 52)
                 .shadow(color: Tone.ember.opacity(0.4), radius: 8)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(r.name).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text(r.name).font(.system(size: 17, weight: .bold)).foregroundStyle(Tone.ink)
                     HStack(spacing: 5) {
                         ForEach(Array(r.steps.prefix(6).enumerated()), id: \.offset) { _, step in
                             Image(systemName: step.symbol).font(.system(size: 11, weight: .semibold))
@@ -202,7 +202,7 @@ struct RoutineEditor: View {
                     .frame(width: 84, height: 84)
                     .shadow(color: Tone.ember.opacity(0.45), radius: 16)
                     TextField("nombre", text: r.name)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(.system(size: 26, weight: .bold))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(Tone.ink)
                 }
@@ -233,7 +233,7 @@ struct RoutineEditor: View {
                     stem(r)
                     Button { adding = true } label: {
                         Label("agregar paso", systemImage: "plus")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Tone.ember)
                             .frame(maxWidth: .infinity).frame(height: 52)
                             .background(Capsule().strokeBorder(Tone.ember.opacity(0.5),
@@ -360,7 +360,7 @@ struct StepPicker: View {
                             HStack {
                                 Image(systemName: "speaker.fill").foregroundStyle(Tone.ink.opacity(0.5))
                                 Slider(value: $level, in: 0...1).tint(Tone.ember)
-                                Text("\(Int(level * 100)) %").font(.system(size: 13, weight: .bold, design: .rounded))
+                                Text("\(Int(level * 100)) %").font(.system(size: 13, weight: .bold))
                                     .monospacedDigit().foregroundStyle(Tone.ember).frame(width: 48)
                             }
                             HStack(spacing: Space.s) {
@@ -509,7 +509,7 @@ struct ShortcutEditorPage: View {
                         editing = s.id
                     } label: {
                         VStack(spacing: 6) {
-                            Text(s.glyphs).font(.system(size: 22, weight: .semibold, design: .rounded))
+                            Text(s.glyphs).font(.system(size: 22, weight: .semibold))
                                 .foregroundStyle(Tone.ember).lineLimit(1).minimumScaleFactor(0.6)
                             Text(s.title).font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(Tone.ink.opacity(0.65)).lineLimit(1)
@@ -589,7 +589,7 @@ struct ShortcutForm: View {
                     // Vista previa: la combinación como una tecla grande.
                     VStack(spacing: 6) {
                         Text(s.wrappedValue.glyphs)
-                            .font(.system(size: 40, weight: .semibold, design: .rounded))
+                            .font(.system(size: 40, weight: .semibold))
                             .foregroundStyle(Tone.ember)
                             .contentTransition(.interpolate)
                         TextField("nombre", text: s.title)
@@ -669,7 +669,7 @@ struct ShortcutForm: View {
             withAnimation(.spring(duration: 0.25)) { selection.wrappedValue = k }
         } label: {
             Text(Shortcut(title: "", key: k).keyGlyph)
-                .font(.system(size: wide ? 13 : 16, weight: .semibold, design: .rounded))
+                .font(.system(size: wide ? 13 : 16, weight: .semibold))
                 .foregroundStyle(on ? Tone.ember : Tone.ink.opacity(0.8))
                 .frame(maxWidth: wide ? nil : .infinity)
                 .padding(.horizontal, wide ? 14 : 0)
@@ -759,7 +759,7 @@ struct TouchBarPage: View {
             .tint(Tone.ember)
         }
         .padding(.horizontal, Space.m).frame(height: 64)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+        .glass(20)
     }
 
     private func arrow(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {

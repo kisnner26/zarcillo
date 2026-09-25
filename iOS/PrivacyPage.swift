@@ -21,7 +21,7 @@ struct PrivacyPage: View {
             } label: {
                 Label(remote.privacyOn ? "privacidad activada" : "activar privacidad",
                       systemImage: remote.privacyOn ? "eye.slash.fill" : "eye")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 16, weight: .bold))
                     .contentTransition(.symbolEffect(.replace))
                     .foregroundStyle(remote.privacyOn ? Tone.onEmber : Tone.ink)
                     .frame(maxWidth: .infinity).frame(height: 54)
@@ -41,7 +41,7 @@ struct PrivacyPage: View {
                     .tint(Tone.ember)
             }
             .padding(Space.m)
-            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+            .glass(22)
 
             ToggleCard(title: "foco en el cursor", detail: "solo queda clara la zona donde trabajas", isOn: $focus)
                 .onChange(of: focus) { _, _ in resend() }
@@ -84,7 +84,7 @@ struct PrivacyPage: View {
                         ForEach([Color.red, .yellow, .green], id: \.self) { Circle().fill($0.opacity(0.7)).frame(width: 7, height: 7) }
                     }
                     Text("Cuenta · saldo").font(.system(size: 11, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.6))
-                    Text("C$ 24 580,00").font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text("C$ 24 580,00").font(.system(size: 22, weight: .bold)).foregroundStyle(Tone.ink)
                     ForEach(0..<3, id: \.self) { i in
                         RoundedRectangle(cornerRadius: 3).fill(Tone.ink.opacity(0.18)).frame(width: [150, 190, 120][i], height: 6)
                     }

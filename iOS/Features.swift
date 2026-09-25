@@ -120,7 +120,7 @@ struct PowerPage: View {
                     .foregroundStyle(.white).frame(width: 46, height: 46)
                     .background(Circle().fill(Tone.key))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 17, weight: .bold, design: .rounded))
+                    Text(title).font(.system(size: 17, weight: .bold))
                     Text(detail).font(.system(size: 12, weight: .medium)).opacity(0.65)
                 }
                 .foregroundStyle(Tone.ink)
@@ -128,7 +128,7 @@ struct PowerPage: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+            .glass(20)
         }
         .buttonStyle(PressScale())
     }
@@ -200,7 +200,7 @@ struct KeyboardBar: View {
                             Haptic.tap()
                             remote.send(.key(name: name))
                         } label: {
-                            Text(label).font(.system(size: 15, weight: .semibold, design: .rounded))
+                            Text(label).font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(minWidth: 44, minHeight: 36)
                                 .padding(.horizontal, 4)

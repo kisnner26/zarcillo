@@ -10,7 +10,7 @@ struct ShotsPage: View {
 
     var body: some View {
         StageScroll(spacing: Space.m) {
-            Image(systemName: "camera.viewfinder").font(.system(size: 44, weight: .semibold))
+            HeroMark(symbol: "camera.viewfinder")
                 .foregroundStyle(remote.screenshotsOn ? Tone.ember : Tone.ink.opacity(0.4))
                 .symbolEffect(.bounce, value: remote.shots.count)
             ToggleCard(title: "capturas del Mac al iPhone", detail: "cada vez que tomas una con ⇧⌘3, ⇧⌘4 o ⇧⌘5",
@@ -80,7 +80,7 @@ struct ShotSheet: View {
         }
         .foregroundStyle(Tone.ink.opacity(0.85))
         .frame(maxWidth: .infinity).frame(height: 62)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+        .glass(18)
     }
 }
 
@@ -136,7 +136,7 @@ struct PolaroidPile: View {
                 } label: {
                     Label(fanned ? "recoger el montón" : "abrir el montón · \(shots.count)",
                           systemImage: fanned ? "square.stack" : "rectangle.stack.fill")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Tone.ink.opacity(0.85))
                         .padding(.horizontal, 16).frame(height: 44)
                         .background(Capsule().fill(Tone.key))

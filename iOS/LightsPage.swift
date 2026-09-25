@@ -24,7 +24,7 @@ struct LightsPage: View {
                             Image(systemName: "sun.max.fill").foregroundStyle(Tone.ember)
                         }
                         .padding(.horizontal, Space.m).frame(height: 56)
-                        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+                        .glass(20)
                     }
                 }
 
@@ -42,7 +42,7 @@ struct LightsPage: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { scanning = false }
                     } label: {
                         Label(scanning ? "buscando…" : "buscar focos", systemImage: "dot.radiowaves.left.and.right")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Tone.ember)
                             .symbolEffect(.variableColor.iterative, isActive: scanning)
                             .frame(maxWidth: .infinity).frame(height: 52)

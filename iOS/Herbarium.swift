@@ -111,7 +111,7 @@ struct HerbariumPage: View {
 
     var body: some View {
         StageScroll(spacing: Space.m) {
-            Image(systemName: "leaf.circle").font(.system(size: 46, weight: .semibold)).foregroundStyle(Tone.leaf)
+            HeroMark(symbol: "leaf.circle").foregroundStyle(Tone.leaf)
                 .symbolEffect(.pulse, isActive: working)
 
             Button {
@@ -119,7 +119,7 @@ struct HerbariumPage: View {
                 camera = true
             } label: {
                 Label(working ? "leyendo la planta…" : "fotografiar una planta", systemImage: "camera.fill")
-                    .font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Tone.onEmber)
+                    .font(.system(size: 16, weight: .bold)).foregroundStyle(Tone.onEmber)
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(Capsule().fill(Tone.ember))
             }
@@ -160,7 +160,7 @@ struct HerbariumPage: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(card.name).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+                    Text(card.name).font(.system(size: 17, weight: .bold)).foregroundStyle(Tone.ink)
                     if !card.scientific.isEmpty {
                         Text(card.scientific).font(.system(size: 12)).italic().foregroundStyle(Tone.ink.opacity(0.55))
                     }
@@ -178,7 +178,7 @@ struct HerbariumPage: View {
             }
         }
         .padding(Space.m)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Tone.key))
+        .glass(22)
     }
 
     private func line(_ symbol: String, _ text: String) -> some View {

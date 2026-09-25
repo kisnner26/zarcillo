@@ -354,7 +354,7 @@ struct ConnectView: View {
                             Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(Tone.ink.opacity(0.35))
                         }
                         .padding(.horizontal, Space.m).frame(height: 56)
-                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+                        .glass(18)
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Tone.stroke, lineWidth: 1))
                     }
                     .buttonStyle(PressScale())
@@ -408,7 +408,7 @@ struct ConnectView: View {
             Divider().overlay(Tone.stroke)
             step("leaf.fill", "Espera un momento", "El Mac aparece aquí solo, sin configurar nada.")
         }
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+        .glass(20)
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Tone.stroke, lineWidth: 1))
     }
 
@@ -440,7 +440,7 @@ struct ConnectView: View {
             .buttonStyle(PressScale())
         }
         .padding(Space.m)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+        .glass(20)
     }
 
     private var codeBoxes: some View {

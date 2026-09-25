@@ -108,7 +108,7 @@ struct LayersPage: View {
                 appIcon(app)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(name).font(.system(size: 11, weight: .semibold)).foregroundStyle(Tone.ink.opacity(0.55))
-                    Text(title).font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink).lineLimit(1)
+                    Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(Tone.ink).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }

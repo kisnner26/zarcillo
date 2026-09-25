@@ -466,7 +466,7 @@ struct StoryPoster: View {
                 HStack(spacing: 7) {
                     Image(systemName: "leaf.fill").foregroundStyle(Tone.ember)
                     Text("zarcillo")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.system(size: 16, weight: .semibold))
                         .tracking(1.5)
                         .foregroundStyle(.white.opacity(0.85))
                 }

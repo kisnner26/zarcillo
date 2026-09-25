@@ -221,6 +221,11 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
 }
 
 extension MoreItem {
+    /// La rama de "Más" a la que pertenece (para su color).
+    var group: MoreGroup { MoreGroup.allCases.first { $0.items.contains(self) } ?? .custom }
+}
+
+extension MoreItem {
     /// Las opciones que tienen sentido para este Mac (sin Touch Bar, no se
     /// ofrece), en el orden de sus grupos: así la perilla las recorre igual
     /// que se ven.
@@ -1000,7 +1005,7 @@ struct PadStage: View {
         }
         .foregroundStyle(Tone.ink.opacity(0.85))
         .frame(maxWidth: .infinity).frame(height: 62)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+        .glass(18)
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
             .strokeBorder(LinearGradient(colors: [Tone.ink.opacity(0.14), .black.opacity(0.5)],
                                          startPoint: .top, endPoint: .bottom), lineWidth: 1))
@@ -1024,13 +1029,13 @@ struct ShortcutSheet: View {
                             remote.send(.shortcut(s))
                         } label: {
                             VStack(spacing: 6) {
-                                Text(s.glyphs).font(.system(size: 22, weight: .semibold, design: .rounded))
+                                Text(s.glyphs).font(.system(size: 22, weight: .semibold))
                                     .foregroundStyle(Tone.ember)
                                 Text(s.title).font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(Tone.ink.opacity(0.7)).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity).frame(height: 88)
-                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+                            .glass(20)
                             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Tone.stroke, lineWidth: 1))
                             .boing(taps[s.id, default: 0], amount: 0.08)
                         }
@@ -1065,19 +1070,24 @@ struct MoreStage: View {
     var body: some View {
         Group {
             if let open = deck.moreOpen {
-                Group {
-                    if open == .routines || open == .shortcuts {
-                        // Estas tienen su propia barra de navegación: el botón va en una fila.
-                        VStack(spacing: 0) {
-                            HStack { backButton; Spacer() }.padding(Space.m)
-                            page(open).frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Cabecera fija: volver, el nombre en serif y qué hace. El contenido va debajo,
+                // nunca tapado por un botón flotante.
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        backButton
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(open.title.prefix(1).uppercased() + open.title.dropFirst())
+                                .font(Typo.title(20)).foregroundStyle(Tone.ink)
+                            Text(open.detail).font(Typo.label(12)).foregroundStyle(Tone.ink.opacity(0.5)).lineLimit(1)
                         }
-                    } else {
-                        // El resto usa todo el escenario; volver flota en la esquina.
-                        page(open)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .overlay(alignment: .topLeading) { backButton.padding(Space.m) }
+                        Spacer(minLength: 0)
+                        Image(systemName: open.symbol).font(.system(size: 17)).foregroundStyle(open.group.hue.opacity(0.9))
+                            .frame(width: 36, height: 36)
                     }
+                    .padding(.horizontal, Space.m).padding(.top, Space.m).padding(.bottom, Space.s)
+                    Rectangle().fill(LinearGradient(colors: [.clear, Tone.stroke, .clear], startPoint: .leading, endPoint: .trailing))
+                        .frame(height: 1).padding(.horizontal, Space.m)
+                    page(open).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
@@ -1091,10 +1101,10 @@ struct MoreStage: View {
             Haptic.tap()
             withAnimation(.spring(duration: 0.4)) { deck.moreOpen = nil }
         } label: {
-            GlyphView(.back, size: 17)
-                .foregroundStyle(Tone.ink.opacity(0.85))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Tone.key))
+            GlyphView(.back, size: 16)
+                .foregroundStyle(Tone.ink.opacity(0.9))
+                .frame(width: 42, height: 42)
+                .glass(21)
                 .overlay(Circle().stroke(Tone.stroke, lineWidth: 1))
         }
         .buttonStyle(PressScale())
@@ -1231,7 +1241,7 @@ struct MoreStage: View {
             HStack(spacing: 8) {
                 PulseDot(color: Tone.onEmber)
                 Image(systemName: item.symbol).font(.system(size: 13, weight: .bold))
-                Text(item.title).font(.system(size: 13, weight: .bold, design: .rounded))
+                Text(item.title).font(.system(size: 13, weight: .bold))
             }
             .foregroundStyle(Tone.onEmber)
             .padding(.horizontal, 14).frame(height: 40)
@@ -1254,7 +1264,7 @@ struct MoreStage: View {
                     .frame(width: 40, height: 40)
                     .background(Circle().fill(selected ? Tone.ember : Tone.recess))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Text(item.title).font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(selected ? Tone.ember : Tone.ink)
                         .lineLimit(1)
                     Text(item.detail).font(.system(size: 11)).foregroundStyle(Tone.ink.opacity(0.5))
@@ -1264,7 +1274,7 @@ struct MoreStage: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+            .glass(18)
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(selected ? Tone.ember.opacity(0.7) : Tone.stroke, lineWidth: selected ? 1.5 : 1))
             .contentShape(Rectangle())
@@ -1277,7 +1287,7 @@ struct MoreStage: View {
         switch item {
         case .brightness:
             VStack(spacing: 12) {
-                Image(systemName: "sun.max.fill").font(.system(size: 40)).foregroundStyle(Tone.ember)
+                HeroMark(symbol: "sun.max.fill").foregroundStyle(Tone.ember)
                     .symbolEffect(.pulse)
                 Text(remote.brightness == nil ? "este Mac no deja cambiar el brillo"
                                               : "gira la perilla para cambiar el brillo")
@@ -1410,7 +1420,7 @@ struct DeckStage: View {
                     Image(uiImage: icon).resizable().frame(width: 26, height: 26)
                 }
                 Text(a?.appName ?? (remote.frontAppName.isEmpty ? "tus atajos" : remote.frontAppName))
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Tone.ink.opacity(0.8))
                     .contentTransition(.opacity).lineLimit(1)
                 Spacer(minLength: 0)
@@ -1508,7 +1518,7 @@ struct DeckStage: View {
                 .padding(.horizontal, 14).frame(height: 34).background(Capsule().fill(Tone.ember))
         }
         .padding(Space.s)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+        .glass(18)
     }
 
     // MARK: Búsqueda
@@ -1550,7 +1560,7 @@ struct DeckStage: View {
                 Text(action.title).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Tone.ink.opacity(action.enabled ? 0.9 : 0.4))
                     .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.8)
-                Text(subtitle ?? action.glyphs).font(.system(size: 11, weight: .medium, design: .rounded))
+                Text(subtitle ?? action.glyphs).font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Tone.ink.opacity(0.4)).lineLimit(1)
             }
             .padding(.horizontal, 6)

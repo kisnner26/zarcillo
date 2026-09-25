@@ -25,7 +25,7 @@ struct ClassesPage: View {
             orb(side)
         } controls: {
             TextField("materia (Ingeniería de Software II…)", text: $title)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Tone.ink)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16).frame(height: 52)
@@ -45,7 +45,7 @@ struct ClassesPage: View {
                 } label: {
                     Label(marks == 0 ? "marcar este momento" : "marcado \(marks) \(marks == 1 ? "vez" : "veces")",
                           systemImage: "star.fill")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Tone.ember)
                         .symbolEffect(.bounce, value: marks)
                         .frame(maxWidth: .infinity).frame(height: 52)

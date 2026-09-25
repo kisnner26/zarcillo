@@ -190,7 +190,7 @@ struct GuardianPage: View {
                     Spacer()
                 }
                 .padding(Space.s)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Tone.key))
+                .glass(18)
             }
         }
         .animation(.spring(duration: 0.4), value: remote.guardianOn)
@@ -209,7 +209,7 @@ struct AlarmView: View {
             VStack(spacing: Space.l) {
                 Image(systemName: "exclamationmark.shield.fill").font(.system(size: 56, weight: .bold))
                     .foregroundStyle(.white).symbolEffect(.pulse)
-                Text(alarm.reason).font(.system(size: 26, weight: .heavy, design: .rounded))
+                Text(alarm.reason).font(.system(size: 26, weight: .heavy))
                     .foregroundStyle(.white).multilineTextAlignment(.center)
                 if let p = alarm.photo {
                     Image(uiImage: p).resizable().scaledToFit().frame(maxHeight: 280)
@@ -219,7 +219,7 @@ struct AlarmView: View {
                 Button {
                     remote.silenceAlarm()
                 } label: {
-                    Text("silenciar").font(.system(size: 18, weight: .bold, design: .rounded))
+                    Text("silenciar").font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.red).frame(maxWidth: .infinity).frame(height: 60)
                         .background(Capsule().fill(.white))
                 }
@@ -241,7 +241,7 @@ struct NearPage: View {
         StagePage { side in
             radar(side)
         } controls: {
-            Text(status).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
+            Text(status).font(.system(size: 17, weight: .bold)).foregroundStyle(Tone.ink)
                 .contentTransition(.numericText())
             WideButton(title: remote.nearOn ? "desactivar" : "bloquear al alejarme",
                        symbol: remote.nearOn ? "pause.fill" : "lock.fill", filled: !remote.nearOn) {
