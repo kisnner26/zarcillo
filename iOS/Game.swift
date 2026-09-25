@@ -128,7 +128,7 @@ struct GameController: View {
     @StateObject private var keys = GameKeys()
 
     var body: some View {
-        ForceLandscape { pad }
+        ForceLandscape(fullBleed: true) { pad }
             .background(Tone.body.ignoresSafeArea())
     }
 

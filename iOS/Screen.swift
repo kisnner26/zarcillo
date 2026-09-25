@@ -89,7 +89,7 @@ struct FullScreenMac: View {
 
     var body: some View {
         // Horizontal aunque el sistema no gire (giro bloqueado o Duplicación del iPhone).
-        ForceLandscape { screen }
+        ForceLandscape(fullBleed: true) { screen }
             .background(Color.black.ignoresSafeArea())
     }
 
@@ -440,9 +440,20 @@ final class OrientationDelegate: NSObject, UIApplicationDelegate {
 /// el contenido se gira él mismo 90°: horizontal pase lo que pase.
 struct ForceLandscape<Content: View>: View {
     var enabled = true
+    /// Pantallas a sangre (Mac a pantalla completa, mando): ignoran el área segura.
+    /// La app normal no: si no, todo se mete bajo la barra de estado y el indicador de inicio.
+    var fullBleed = false
     @ViewBuilder var content: () -> Content
 
     var body: some View {
+        if enabled {
+            rotating.ignoresSafeArea(edges: fullBleed ? .all : [])
+        } else {
+            content()
+        }
+    }
+
+    private var rotating: some View {
         GeometryReader { g in
             // Solo si el sistema dijo que no puede girar: si gira él, girar también aquí
             // pondría todo de lado (pasaba en la Duplicación del iPhone).
@@ -454,7 +465,6 @@ struct ForceLandscape<Content: View>: View {
                 .rotationEffect(.degrees(turn ? 90 : 0))
                 .position(x: g.size.width / 2, y: g.size.height / 2)
         }
-        .ignoresSafeArea()
     }
 }
 

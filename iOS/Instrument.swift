@@ -1102,7 +1102,6 @@ struct MoreStage: View {
         let live = all.filter { remote.isActive($0) }
         return GeometryReader { geo in
             let wide = StageMetrics.wide(geo.size)
-            let columns = [GridItem(.adaptive(minimum: wide ? 96 : 92, maximum: 140), spacing: Space.s)]
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: Space.m) {
@@ -1118,7 +1117,7 @@ struct MoreStage: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
                         ForEach(MoreItem.groups(touchBar: remote.hasTouchBar), id: \.group) { section in
-                            branch(section.group, section.items, columns: columns, all: all)
+                            branch(section.group, section.items, all: all)
                         }
                     }
                     .frame(maxWidth: wide ? 760 : 560)
@@ -1139,7 +1138,7 @@ struct MoreStage: View {
     }
 
     /// Una rama: su hoja con el ícono, su nombre y sus funciones.
-    private func branch(_ group: MoreGroup, _ items: [MoreItem], columns: [GridItem], all: [MoreItem]) -> some View {
+    private func branch(_ group: MoreGroup, _ items: [MoreItem], all: [MoreItem]) -> some View {
         let running = items.filter { remote.isActive($0) }.count
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -1161,7 +1160,7 @@ struct MoreStage: View {
                         .transition(.scale.combined(with: .opacity))
                 }
             }
-            LazyVGrid(columns: columns, spacing: Space.s) {
+            CenteredGrid(minimum: 96, maxColumns: 4, spacing: Space.s) {
                 ForEach(items) { item in
                     tile(item, group: group, index: all.firstIndex(of: item) ?? 0).id(item)
                 }
@@ -1483,7 +1482,7 @@ struct DeckStage: View {
     }
 
     private func grid(_ actions: [DeckAction]) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+        CenteredGrid(minimum: 92, maxColumns: 5, spacing: 10) {
             ForEach(actions) { tile($0) }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25), value: remote.frontAppID)
@@ -1541,7 +1540,7 @@ struct DeckStage: View {
             Text("nada se llama así en esta app").font(.system(size: 13)).foregroundStyle(Tone.ink.opacity(0.5))
                 .frame(maxWidth: .infinity).padding(.top, Space.xl)
         } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+            CenteredGrid(minimum: 92, maxColumns: 5, spacing: 10) {
                 ForEach(found.prefix(60)) { tile($0, subtitle: $0.glyphs.isEmpty ? $0.path?.first : $0.glyphs) }
             }
         }

@@ -13,6 +13,17 @@ struct ZarcilloApp: App {
                 .preferredColorScheme(.dark)
                 .buttonStyle(PressScale())
                 .scrollDismissesKeyboard(.interactively)
+                // En cualquier campo de texto, un "Listo" sobre el teclado lo cierra.
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Listo") {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
+                        .fontWeight(.semibold)
+                        .tint(Tone.ember)
+                    }
+                }
                 .persistentSystemOverlays(.hidden)
                 .onAppear {
                     WatchLink.shared.start(remote)
