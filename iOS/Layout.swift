@@ -98,12 +98,12 @@ struct ToggleCard: View {
     var body: some View {
         Toggle(isOn: $isOn) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.ink)
+                Text(title).font(Typo.label(15, .semibold)).foregroundStyle(Tone.ink)
                 Text(detail).font(.system(size: 12)).foregroundStyle(Tone.ink.opacity(0.5))
             }
         }
         .tint(Tone.ember)
         .padding(.horizontal, Space.m).frame(minHeight: 64)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.key))
+        .glass(20)
     }
 }

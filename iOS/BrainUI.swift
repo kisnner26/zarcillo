@@ -32,7 +32,8 @@ struct BrainOverlay: View {
         VStack(alignment: .leading, spacing: 10) { content() }
             .padding(Space.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Tone.key))
+            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.regularMaterial).environment(\.colorScheme, .dark))
+            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Tone.body.opacity(0.6)))
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Tone.ember.opacity(0.4), lineWidth: 1))
             .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
             .padding(.horizontal, Space.m)

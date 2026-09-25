@@ -19,7 +19,7 @@ enum Space {
     static let l: CGFloat = 24
     static let xl: CGFloat = 32
     static let tap: CGFloat = 48
-    static let stageRadius: CGFloat = 32
+    static let stageRadius: CGFloat = 36
 }
 
 enum DeckMode: Int, CaseIterable, Identifiable {
@@ -335,7 +335,7 @@ struct Toast: View {
                 Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.ink).lineLimit(1)
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Capsule().fill(Tone.key))
+            .background(Capsule().fill(.regularMaterial).environment(\.colorScheme, .dark))
             .overlay(Capsule().stroke(Tone.ember.opacity(0.35), lineWidth: 1))
             .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
             .padding(.top, 4)
@@ -381,7 +381,10 @@ struct Stage: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Space.stageRadius, style: .continuous)
         ZStack {
-            shape.fill(Tone.recess)
+            // Vidrio esmerilado: deja ver el invernadero de fondo, borroso.
+            shape.fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
+            shape.fill(LinearGradient(colors: [Color.white.opacity(0.05), Tone.body.opacity(0.55), Tone.body.opacity(0.75)],
+                                      startPoint: .top, endPoint: .bottom))
             Group {
                 switch deck.mode {
                 case .pad: PadStage()
@@ -393,17 +396,18 @@ struct Stage: View {
                 }
             }
             .id(deck.mode)
-            .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.97)),
+            .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.98)).combined(with: .offset(y: 8)),
                                     removal: .opacity))
-            // Sombra interior: oscuro arriba, un filo de luz abajo. Se lee hundido.
+            // Filo de luz: brillante arriba, casi nada abajo. Se lee como un panel de vidrio.
             shape.strokeBorder(
-                LinearGradient(colors: [.black.opacity(0.7), Tone.stroke, Tone.ink.opacity(0.10)],
+                LinearGradient(colors: [.white.opacity(0.26), .white.opacity(0.07), .white.opacity(0.04)],
                                startPoint: .top, endPoint: .bottom),
-                lineWidth: 1.5)
+                lineWidth: 1)
                 .allowsHitTesting(false)
         }
         .clipShape(shape)
-        .animation(.spring(duration: 0.4, bounce: 0.2), value: deck.mode)
+        .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+        .animation(.spring(duration: 0.45, bounce: 0.18), value: deck.mode)
     }
 }
 
@@ -551,7 +555,7 @@ struct OrbitRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Tone.stroke.opacity(0.9), lineWidth: 1)
+            Circle().stroke(Panel.stroke.opacity(0.9), lineWidth: 1)
                 .frame(width: radius * 2 + 48, height: radius * 2 + 48)
             ForEach(DeckMode.allCases) { m in
                 let angle = (Double(m.rawValue - deck.mode.rawValue) * step - 90) * .pi / 180
@@ -564,12 +568,12 @@ struct OrbitRing: View {
                                 .transition(.scale.combined(with: .opacity))
                         }
                     }
-                    .foregroundStyle(selected ? Tone.onEmber : Tone.ink.opacity(0.7))
+                    .foregroundStyle(selected ? Panel.onEmber : Panel.ink.opacity(0.7))
                     .padding(.horizontal, selected ? 16 : 0)
                     .frame(minWidth: Space.tap, minHeight: Space.tap)
-                    .background(Capsule().fill(selected ? Tone.ember : Tone.key))
-                    .overlay(Capsule().stroke(selected ? .clear : Tone.stroke, lineWidth: 1))
-                    .shadow(color: selected ? Tone.ember.opacity(0.45) : .clear, radius: 12)
+                    .background(Capsule().fill(selected ? Panel.ember : Panel.key))
+                    .overlay(Capsule().stroke(selected ? .clear : Panel.stroke, lineWidth: 1))
+                    .shadow(color: selected ? Panel.ember.opacity(0.45) : .clear, radius: 12)
                 }
                 .buttonStyle(PressScale())
                 .accessibilityLabel(m.label)
@@ -624,23 +628,23 @@ struct Knob: View {
     var body: some View {
         ZStack {
             // Asiento hundido en la cerámica.
-            Circle().fill(Tone.recess).frame(width: base, height: base)
+            Circle().fill(Panel.recess).frame(width: base, height: base)
             Circle().strokeBorder(
-                LinearGradient(colors: [.black.opacity(0.6), Tone.ink.opacity(0.12)], startPoint: .top, endPoint: .bottom),
+                LinearGradient(colors: [.black.opacity(0.6), Panel.ink.opacity(0.12)], startPoint: .top, endPoint: .bottom),
                 lineWidth: 1.5)
                 .frame(width: base, height: base)
 
             // Cuerpo: estrías y zarcillo giran; la luz se queda quieta.
             ZStack {
-                Circle().fill(Tone.ember)
+                Circle().fill(Panel.ember)
                 ForEach(0..<40, id: \.self) { i in
-                    Capsule().fill(Tone.emberDeep)
+                    Capsule().fill(Panel.emberDeep)
                         .frame(width: i % 2 == 0 ? 3 : 2, height: i % 10 == 0 ? 16 : (i % 2 == 0 ? 10 : 6))
                         .offset(y: -diameter / 2 + 10)
                         .rotationEffect(.degrees(Double(i) * 9))
                 }
                 Tendril(tightness: value)
-                    .stroke(Tone.body, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
+                    .stroke(Panel.body, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
                     .frame(width: diameter * 0.6, height: diameter * 0.6)
             }
             .frame(width: diameter, height: diameter)
@@ -656,28 +660,28 @@ struct Knob: View {
                         LinearGradient(colors: [.white.opacity(0.35), .black.opacity(0.35)],
                                        startPoint: .topLeading, endPoint: .bottomTrailing),
                         lineWidth: 2)
-                    Circle().fill(Tone.ember.opacity(pressed ? 0.18 : 0)).blendMode(.plusLighter)
+                    Circle().fill(Panel.ember.opacity(pressed ? 0.18 : 0)).blendMode(.plusLighter)
                     Grain(opacity: 0.12).clipShape(Circle())
                 }
                 .clipShape(Circle())
                 .allowsHitTesting(false)
             }
-            .shadow(color: Tone.ember.opacity(pressed ? 0.55 : 0.3), radius: pressed ? 26 : 16)
+            .shadow(color: Panel.ember.opacity(pressed ? 0.55 : 0.3), radius: pressed ? 26 : 16)
             .scaleEffect(pressed ? 0.96 : 1)
             .animation(.spring(duration: 0.25, bounce: 0.45), value: pressed)
             .animation(.easeOut(duration: 0.25), value: value)
 
-            Ripple(trigger: presses, cornerRadius: diameter / 2, color: Tone.ember)
+            Ripple(trigger: presses, cornerRadius: diameter / 2, color: Panel.ember)
                 .frame(width: diameter, height: diameter)
 
             // Lectura: una placa fija en el borde inferior del asiento.
             Text(caption)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Tone.ember)
+                .foregroundStyle(Panel.ember)
                 .padding(.horizontal, 12).padding(.vertical, 5)
-                .background(Capsule().fill(Tone.body))
-                .overlay(Capsule().stroke(Tone.stroke, lineWidth: 1))
+                .background(Capsule().fill(Panel.body))
+                .overlay(Capsule().stroke(Panel.stroke, lineWidth: 1))
                 .offset(y: base / 2 - 2)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: caption)
@@ -1141,94 +1145,76 @@ struct MoreStage: View {
     private func branch(_ group: MoreGroup, _ items: [MoreItem], all: [MoreItem]) -> some View {
         let running = items.filter { remote.isActive($0) }.count
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                ZStack {
-                    LeafShape().fill(group.hue.opacity(0.22))
-                    LeafShape().stroke(group.hue.opacity(0.7), lineWidth: 1.2)
-                    Image(systemName: group.symbol).font(.system(size: 11, weight: .bold)).foregroundStyle(group.hue)
-                        .offset(y: 2)
-                }
-                .frame(width: 26, height: 32)
-                .rotationEffect(.degrees(-18))
-                Text(group.title).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Tone.ink)
-                Spacer(minLength: 0)
+            // Cabecera de herbario: nombre en serif, una hoja de su color y una línea fina.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                LeafShape().fill(group.hue.opacity(0.85)).frame(width: 9, height: 14).rotationEffect(.degrees(-25))
+                Text(group.title.prefix(1).uppercased() + group.title.dropFirst())
+                    .font(Typo.title(19)).foregroundStyle(Tone.ink)
+                Rectangle().fill(LinearGradient(colors: [Tone.stroke, .clear], startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 1).padding(.leading, 4)
+                    .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 5 }
                 if running > 0 {
                     Text(running == 1 ? "1 activa" : "\(running) activas")
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(Tone.onEmber)
+                        .font(Typo.label(11, .bold)).foregroundStyle(Tone.onEmber)
                         .padding(.horizontal, 9).frame(height: 22)
                         .background(Capsule().fill(Tone.ember))
                         .transition(.scale.combined(with: .opacity))
+                } else {
+                    Text("\(items.count)").font(Typo.catalog(11)).foregroundStyle(Tone.ink.opacity(0.35))
                 }
             }
+            .padding(.horizontal, 2)
             CenteredGrid(minimum: 96, maxColumns: 4, spacing: Space.s) {
                 ForEach(items) { item in
                     tile(item, group: group, index: all.firstIndex(of: item) ?? 0).id(item)
                 }
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(LinearGradient(colors: [group.hue.opacity(0.07), Tone.key.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
-        )
-        .overlay(
-            // Un zarcillo que asoma en la esquina de cada rama.
-            Tendril(tightness: 0.35).stroke(group.hue.opacity(0.18), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                .frame(width: 54, height: 54).offset(x: 14, y: -14)
-                .allowsHitTesting(false),
-            alignment: .topTrailing
-        )
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Tone.stroke.opacity(0.8), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .animation(.spring(duration: 0.35), value: running)
     }
 
     private func tile(_ item: MoreItem, group: MoreGroup, index: Int) -> some View {
         let selected = index == deck.moreIndex
         let on = remote.isActive(item)
+        let number = String(format: "%02d", index + 1)
         return Button {
             Haptic.tap()
             deck.moreIndex = index
             withAnimation(.spring(duration: 0.4, bounce: 0.2)) { deck.moreOpen = item }
         } label: {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle().fill(on ? Tone.ember : Tone.recess)
-                        .shadow(color: on ? Tone.ember.opacity(0.6) : .clear, radius: 10)
-                    Image(systemName: item.symbol).font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(on ? Tone.onEmber : group.hue)
+            // Ficha de espécimen: el icono arriba, su número de catálogo, y el nombre abajo.
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    Image(systemName: item.symbol).font(.system(size: 19, weight: .regular))
+                        .foregroundStyle(on ? Tone.ember : group.hue)
+                        .symbolEffect(.pulse, isActive: on)
+                    Spacer(minLength: 0)
+                    Text(number).font(Typo.catalog(10)).foregroundStyle(Tone.ink.opacity(0.35))
                 }
-                .frame(width: 42, height: 42)
-                Text(item.title).font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(on || selected ? Tone.ink : Tone.ink.opacity(0.8))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 6)
+                Text(item.title).font(Typo.label(13, .semibold))
+                    .foregroundStyle(Tone.ink.opacity(on || selected ? 1 : 0.88))
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                // Una línea fina de su color: encendida, se llena.
+                Capsule().fill(on ? Tone.ember : group.hue.opacity(0.35))
+                    .frame(width: on ? 34 : 14, height: 2)
+                    .padding(.top, 5)
             }
-            .frame(maxWidth: .infinity).frame(height: 92)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(on ? AnyShapeStyle(LinearGradient(colors: [Tone.ember.opacity(0.32), Tone.ember.opacity(0.08)],
-                                                            startPoint: .top, endPoint: .bottom))
-                             : AnyShapeStyle(Tone.key))
-            )
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading).frame(height: 96)
+            .glass(18, tint: on ? Tone.ember : group.hue.opacity(0.4))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(selected ? Tone.ember : (on ? Tone.ember.opacity(0.45) : Tone.stroke),
-                            lineWidth: selected ? 2 : 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Tone.ember.opacity(selected ? 0.9 : (on ? 0.5 : 0)), lineWidth: selected ? 1.5 : 1)
             )
-            // Un brote que late: esta función está encendida.
             .overlay(alignment: .topTrailing) {
-                if on {
-                    PulseDot().padding(9)
-                } else if remote.blocked(item) {
+                if remote.blocked(item) {
                     // Le falta un permiso en el Mac.
-                    Text("!").font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Color.black.opacity(0.75))
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(Color(red: 1, green: 0.78, blue: 0.32)))
-                        .padding(7)
+                    Circle().fill(Color(red: 1, green: 0.78, blue: 0.32)).frame(width: 7, height: 7).padding(10)
+                        .offset(x: -16)
                 }
             }
-            .scaleEffect(selected ? 1.04 : 1)
+            .scaleEffect(selected ? 1.03 : 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScale())

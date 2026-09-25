@@ -3,52 +3,130 @@ import UIKit
 
 // MARK: - Tono
 
-enum Tone {
-    /// Texto y trazos: crema cálido sobre la cerámica.
+/// La paleta del panel de navegación (anillo y perilla): cerámica cálida. No cambia
+/// con el resto del diseño.
+enum Panel {
     static let ink = Color(red: 0.96, green: 0.91, blue: 0.86)
-    /// La cerámica del cuerpo, el hueco del escenario y las teclas.
     static let body = Color(red: 0.106, green: 0.078, blue: 0.067)
     static let recess = Color(red: 0.07, green: 0.051, blue: 0.043)
     static let key = Color(red: 0.165, green: 0.125, blue: 0.11)
     static let stroke = Color(red: 0.23, green: 0.17, blue: 0.145)
-    /// El acento que eligió el usuario (por defecto, el naranja del icono).
     static var ember: Color { Theme.shared.accent }
-    /// El mismo acento, más hondo: estrías de la perilla y sombras.
     static var emberDeep: Color { Theme.shared.accent.mix(with: .black, by: 0.28) }
-    /// Texto sobre el acento: oscuro si el acento es claro, crema si es oscuro.
     static var onEmber: Color { Theme.shared.isLight ? body : ink }
     static let leaf = Color(red: 0.62, green: 0.85, blue: 0.62)
+}
+
+/// Invernadero de noche: verde casi negro, vidrio esmerilado con filos de luz y
+/// texto blanco frío. Es la paleta de todo lo que no es el panel.
+enum Tone {
+    /// Texto: blanco frío, como luz de luna.
+    static let ink = Color(red: 0.93, green: 0.95, blue: 0.92)
+    /// El fondo de la noche.
+    static let body = Color(red: 0.035, green: 0.062, blue: 0.052)
+    /// Hueco: vidrio oscuro. Tarjeta: vidrio un poco más claro. Filo: la luz en el borde del vidrio.
+    static let recess = Color(red: 0.05, green: 0.085, blue: 0.072).opacity(0.72)
+    static let key = Color.white.opacity(0.065)
+    static let stroke = Color.white.opacity(0.11)
+    /// El acento que eligió el usuario.
+    static var ember: Color { Theme.shared.accent }
+    static var emberDeep: Color { Theme.shared.accent.mix(with: .black, by: 0.28) }
+    /// Texto sobre el acento.
+    static var onEmber: Color { Theme.shared.isLight ? Color(red: 0.04, green: 0.06, blue: 0.05) : .white }
+    static let leaf = Color(red: 0.55, green: 0.86, blue: 0.62)
+    /// Verde de invernadero para detalles y líneas.
+    static let moss = Color(red: 0.36, green: 0.62, blue: 0.48)
     // Nombres viejos, para los efectos que aún los usan.
     static var peach: Color { Theme.shared.accent.mix(with: .white, by: 0.45) }
     static var orange: Color { ember }
 }
 
-/// La superficie del control: naranja cálido que brilla, como una lámpara.
+/// Tipografía del nuevo diseño: títulos en serif, como etiquetas de herbario.
+enum Typo {
+    static func title(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold, design: .serif) }
+    static func label(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font { .system(size: size, weight: weight) }
+    static func catalog(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
+}
+
+/// Superficie de vidrio esmerilado con filo de luz arriba: el material del nuevo diseño.
+struct Glass: ViewModifier {
+    var radius: CGFloat = 22
+    var tint: Color = .clear
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .background(
+                ZStack {
+                    shape.fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
+                    shape.fill(LinearGradient(colors: [Color.white.opacity(0.07), tint.opacity(0.10), Color.white.opacity(0.02)],
+                                              startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+            )
+            .overlay(
+                shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.06), .white.opacity(0.10)],
+                                                  startPoint: .top, endPoint: .bottom), lineWidth: 0.8)
+            )
+    }
+}
+
+extension View {
+    func glass(_ radius: CGFloat = 22, tint: Color = .clear) -> some View { modifier(Glass(radius: radius, tint: tint)) }
+}
+
+/// El fondo: noche de invernadero. Arriba, luz de luna fría y sombras de hojas
+/// que se mecen; abajo, el calor del acento donde vive el panel.
 struct Glow: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
 
     var body: some View {
-        // Cerámica oscura con el calor de la brasa subiendo desde abajo. Los
-        // puntos de la malla derivan despacio: 20 cuadros por segundo alcanzan.
         TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
             let t = Float(reduce ? 0 : tl.date.timeIntervalSinceReferenceDate)
-            let warm = Tone.ember.opacity(0.34 + 0.05 * Double(sin(t * 0.7)))
+            let warm = Tone.ember.opacity(0.30 + 0.05 * Double(sin(t * 0.7)))
+            let moon = Color(red: 0.16, green: 0.26, blue: 0.23)
             MeshGradient(
                 width: 3, height: 3,
                 points: [
-                    [0, 0], [0.5, 0], [1, 0],
-                    [0, 0.55 + 0.03 * sin(t * 0.3)], [0.5 + 0.06 * sin(t * 0.25), 0.62], [1, 0.55 + 0.03 * cos(t * 0.3)],
+                    [0, 0], [0.5 + 0.05 * sin(t * 0.2), 0], [1, 0],
+                    [0, 0.5 + 0.03 * sin(t * 0.3)], [0.5 + 0.06 * sin(t * 0.25), 0.58], [1, 0.5 + 0.03 * cos(t * 0.3)],
                     [0, 1], [0.5, 1], [1, 1],
                 ],
                 colors: [
-                    Tone.body, Tone.body, Tone.body,
-                    Tone.body, Tone.body.mix(with: Tone.ember, by: 0.05), Tone.body,
-                    Tone.body.mix(with: Tone.ember, by: 0.12), warm, Tone.body.mix(with: Tone.ember, by: 0.12),
+                    Tone.body.mix(with: moon, by: 0.55), moon, Tone.body.mix(with: moon, by: 0.4),
+                    Tone.body, Tone.body.mix(with: Tone.moss, by: 0.06), Tone.body,
+                    Panel.body.mix(with: Tone.ember, by: 0.14), warm, Panel.body.mix(with: Tone.ember, by: 0.14),
                 ]
             )
         }
-        .overlay(Grain(opacity: 0.07))
+        .overlay(LeafShadows().opacity(reduce ? 0.5 : 1))
+        .overlay(Grain(opacity: 0.05))
         .ignoresSafeArea()
+    }
+}
+
+/// Sombras de hojas grandes y difusas que se mecen despacio, como luz entre plantas.
+struct LeafShadows: View {
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduce)) { tl in
+            let t = reduce ? 0 : tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                ctx.addFilter(.blur(radius: 22))
+                for k in 0..<9 {
+                    let fx = (Double(k) * 0.37).truncatingRemainder(dividingBy: 1)
+                    let fy = (Double(k) * 0.23 + 0.05).truncatingRemainder(dividingBy: 0.55)
+                    let sway = sin(t * 0.35 + Double(k) * 1.3) * 10
+                    var c = ctx
+                    c.translateBy(x: fx * size.width + sway, y: fy * size.height)
+                    c.rotate(by: .degrees(Double(k) * 41 + sin(t * 0.3 + Double(k)) * 6))
+                    let h = size.width * (0.28 + 0.12 * ((Double(k) * 0.61).truncatingRemainder(dividingBy: 1)))
+                    c.fill(LeafShape().path(in: CGRect(x: -h * 0.28, y: -h / 2, width: h * 0.56, height: h)),
+                           with: .color(.black.opacity(0.22)))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

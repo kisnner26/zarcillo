@@ -558,11 +558,12 @@ struct Keycap: View {
     var radius: CGFloat = 20
 
     var body: some View {
-        RoundedRectangle(cornerRadius: radius, style: .continuous)
-            .fill(on ? Tone.ember.opacity(0.18) : Tone.key)
+        // Tecla de vidrio: filo de luz arriba; encendida, se tiñe del acento.
+        Color.clear
+            .glass(radius, tint: on ? Tone.ember : .clear)
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(on ? Tone.ember : Tone.stroke, lineWidth: on ? 1.5 : 1))
-            .shadow(color: on ? Tone.ember.opacity(0.35) : .black.opacity(0.35), radius: on ? 10 : 3, y: on ? 0 : 2)
+                .strokeBorder(Tone.ember.opacity(on ? 0.9 : 0), lineWidth: 1.2))
+            .shadow(color: on ? Tone.ember.opacity(0.3) : .clear, radius: 10)
     }
 }
 
