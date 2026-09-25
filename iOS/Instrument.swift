@@ -61,7 +61,7 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, privacy, game, orientation, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
+    case classes, shield, privacy, game, orientation, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
     var id: Int { rawValue }
 
     var title: String {
@@ -69,6 +69,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .classes: "clases"
         case .brain: "cerebro"
         case .privacy: "privacidad"
+        case .shield: "escudo"
         case .game: "mando"
         case .orientation: "giro"
         case .shots: "capturas"
@@ -105,6 +106,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .classes: "transcribe y traduce en vivo"
         case .brain: "Claude y lo que va aprendiendo"
         case .privacy: "filtro antiespía en la pantalla"
+        case .shield: "todo protegido, pánico e intrusos"
         case .game: "mando o volante para juegos"
         case .orientation: "horizontal fija, sin depender del bloqueo"
         case .shots: "las del Mac, reveladas al llegar"
@@ -141,6 +143,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .classes: "waveform"
         case .brain: "brain.head.profile"
         case .privacy: "eye.slash"
+        case .shield: "shield.lefthalf.filled"
         case .game: "gamecontroller.fill"
         case .orientation: "rectangle.landscape.rotate"
         case .shots: "camera.viewfinder"
@@ -214,7 +217,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         case .mac: [.game, .detach, .mixer, .gaze, .laser, .gestures, .power, .brightness]
         case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
-        case .security: [.privacy, .guardian, .near, .guest]
+        case .security: [.shield, .privacy, .guardian, .near, .guest]
         case .custom: [.orientation, .garden, .herbarium, .brain, .routines, .shortcuts, .touchBar, .color, .permissions]
         }
     }
@@ -1310,6 +1313,7 @@ struct MoreStage: View {
         case .classes: ClassesPage()
         case .brain: BrainPage()
         case .privacy: PrivacyPage()
+        case .shield: ShieldPage()
         case .game: GamePage()
         case .orientation: OrientationPage()
         case .shots: ShotsPage()
@@ -1615,6 +1619,7 @@ extension Remote {
         switch item {
         case .guardian: guardianOn
         case .privacy: privacyOn
+        case .shield: guardianOn || nearOn || privacyOn
         case .near: nearOn
         case .guest: guestURL != nil
         case .posture: postureOn

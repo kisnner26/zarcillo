@@ -146,6 +146,8 @@ final class Server: ObservableObject {
         }
         guardian.onAlert = { [weak self] reason, photo in
             guard let self else { return }
+            // Solo con el primer aviso (la foto llega después como segundo aviso).
+            if photo == nil { self.bridge.thorns() }
             self.broadcast(.guardianAlert(reason: reason, photo: photo))
         }
         near.passcode = passcode

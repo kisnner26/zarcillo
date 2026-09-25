@@ -549,6 +549,7 @@ final class Remote: ObservableObject {
             siren.keepAlive(on)
         case .guardianAlert(let reason, let photo):
             let img = photo.flatMap { UIImage(data: $0) }
+            IntruderLog.shared.record(reason, photo: img)
             // La foto llega después del aviso: se suma al mismo.
             if let img, let last = alarms.last, last.reason == reason, Date().timeIntervalSince(last.at) < 30 {
                 alarms[alarms.count - 1].photo = img

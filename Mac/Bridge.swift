@@ -8,7 +8,7 @@ import SwiftUI
 /// que ve el iPhone.
 @MainActor
 final class Bridge {
-    enum Kind { case grow, wither, click(CGPoint), leaf(CGFloat) }
+    enum Kind { case grow, wither, click(CGPoint), leaf(CGFloat), thorns }
 
     struct Effect: Identifiable {
         let id = UUID()
@@ -20,6 +20,7 @@ final class Bridge {
             case .wither: 1.6
             case .click: 0.9
             case .leaf: 1.4
+            case .thorns: 5.0
             }
         }
     }
@@ -41,6 +42,8 @@ final class Bridge {
 
     func connected() { add(.grow) }
     func disconnected() { add(.wither) }
+    /// El guardián saltó: enredaderas con espinas cubren la pantalla desde los bordes.
+    func thorns() { add(.thorns) }
 
     /// Un clic que vino del iPhone, donde está el cursor.
     func click() {
@@ -140,6 +143,7 @@ private struct BridgeView: View {
                     case .wither: vine(&ctx, size, t, withering: true)
                     case .click(let p): tendril(&ctx, size, to: p, t)
                     case .leaf(let fx): floatingLeaf(&ctx, size, fx, t, seed: e.id.hashValue)
+                    case .thorns: thorns(&ctx, size, t)
                     }
                 }
             }
@@ -257,5 +261,65 @@ private struct BridgeView: View {
         let alpha = f < 0.2 ? f / 0.2 : max(0, 1 - (f - 0.2) / 0.8)
         leaf(&ctx, at: CGPoint(x: x, y: y), angle: sin(t * 4) * 0.6, size: 26,
              color: Color(red: 0.55, green: 0.86, blue: 0.62).opacity(0.85 * alpha))
+    }
+
+    // MARK: Guardián: la pantalla se cierra con enredaderas.
+
+    private func thorns(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: Double) {
+        let grow = ease(t / 1.8)
+        let alpha = t < 4.2 ? 1 : max(0, 1 - (t - 4.2) / 0.8)
+        // Oscurece hacia los bordes, como si el invernadero se cerrara.
+        ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                 with: .radialGradient(Gradient(colors: [.clear, Color.black.opacity(0.55 * grow * alpha)]),
+                                       center: CGPoint(x: size.width / 2, y: size.height / 2),
+                                       startRadius: size.width * 0.18, endRadius: size.width * 0.7))
+        let vine = Color(red: 0.28, green: 0.52, blue: 0.34)
+        let n = 16
+        for k in 0..<n {
+            // Salen de puntos repartidos por el borde y se enroscan hacia el centro.
+            let f = Double(k) / Double(n)
+            let per = 2 * (size.width + size.height)
+            var d = f * per
+            let start: CGPoint
+            if d < size.width { start = CGPoint(x: d, y: 0) }
+            else if (d - size.width) < size.height { d -= size.width; start = CGPoint(x: size.width, y: d) }
+            else if (d - size.width - size.height) < size.width { d -= size.width + size.height; start = CGPoint(x: size.width - d, y: size.height) }
+            else { d -= 2 * size.width + size.height; start = CGPoint(x: 0, y: size.height - d) }
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let reach = 0.42 + 0.12 * sin(Double(k) * 1.7)
+            let end = CGPoint(x: start.x + (center.x - start.x) * reach, y: start.y + (center.y - start.y) * reach)
+            let bend: CGFloat = k % 2 == 0 ? 1 : -1
+            let mid = CGPoint(x: (start.x + end.x) / 2 + bend * (end.y - start.y) * 0.3, y: (start.y + end.y) / 2 - bend * (end.x - start.x) * 0.3)
+            var path = Path()
+            let steps = Int(60 * grow)
+            guard steps > 1 else { continue }
+            var pts: [CGPoint] = []
+            for i in 0...steps {
+                let u = Double(i) / 60
+                let v = 1 - u
+                let p = CGPoint(x: v * v * start.x + 2 * v * u * mid.x + u * u * end.x,
+                                y: v * v * start.y + 2 * v * u * mid.y + u * u * end.y)
+                pts.append(p)
+                if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+            }
+            ctx.stroke(path, with: .color(vine.opacity(0.95 * alpha)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+            for i in stride(from: 5, to: pts.count - 1, by: 6) {
+                let p = pts[i], q = pts[i - 1]
+                let ang = atan2(p.y - q.y, p.x - q.x)
+                // Espinas: triángulos pequeños a los lados; y alguna hoja.
+                for s in [-1.0, 1.0] {
+                    var th = Path()
+                    let base = CGPoint(x: p.x + cos(ang + s * .pi / 2) * 3, y: p.y + sin(ang + s * .pi / 2) * 3)
+                    th.move(to: CGPoint(x: base.x + cos(ang) * 4, y: base.y + sin(ang) * 4))
+                    th.addLine(to: CGPoint(x: base.x - cos(ang) * 4, y: base.y - sin(ang) * 4))
+                    th.addLine(to: CGPoint(x: p.x + cos(ang + s * .pi / 2) * 12, y: p.y + sin(ang + s * .pi / 2) * 12))
+                    th.closeSubpath()
+                    ctx.fill(th, with: .color(Color(red: 0.62, green: 0.2, blue: 0.2).opacity(0.9 * alpha)))
+                }
+                if i % 12 == 5 {
+                    leaf(&ctx, at: p, angle: ang + .pi / 2 + (i % 24 == 5 ? 0.8 : -0.8), size: 26, color: vine.opacity(0.95 * alpha))
+                }
+            }
+        }
     }
 }
