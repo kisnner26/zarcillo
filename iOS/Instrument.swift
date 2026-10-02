@@ -61,7 +61,7 @@ enum DeckMode: Int, CaseIterable, Identifiable {
 }
 
 enum MoreItem: Int, CaseIterable, Identifiable {
-    case classes, shield, privacy, game, orientation, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions
+    case classes, shield, privacy, game, orientation, photos, send, scan, shots, garden, herbarium, layers, brain, detach, mixer, gaze, guardian, near, guest, compass, callLight, posture, lights, brightness, color, touchBar, gestures, laser, power, routines, shortcuts, permissions, island
     var id: Int { rawValue }
 
     var title: String {
@@ -98,6 +98,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .power: "energía"
         case .routines: "escenas"
         case .shortcuts: "atajos"
+        case .island: "isla"
         }
     }
 
@@ -135,6 +136,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .power: "bloquear, suspender, despertar"
         case .routines: "varias acciones de un toque"
         case .shortcuts: "teclas del pad"
+        case .island: "la Dynamic Island y el bloqueo"
         }
     }
 
@@ -172,6 +174,7 @@ enum MoreItem: Int, CaseIterable, Identifiable {
         case .power: "power"
         case .routines: "sparkles"
         case .shortcuts: "command"
+        case .island: "capsule.fill"
         }
     }
 }
@@ -218,7 +221,7 @@ enum MoreGroup: Int, CaseIterable, Identifiable {
         case .send: [.photos, .send, .scan, .shots, .classes]
         case .ambience: [.lights, .callLight, .posture]
         case .security: [.shield, .privacy, .guardian, .near, .guest]
-        case .custom: [.orientation, .garden, .herbarium, .brain, .routines, .shortcuts, .touchBar, .color, .permissions]
+        case .custom: [.orientation, .garden, .herbarium, .brain, .routines, .shortcuts, .touchBar, .color, .island, .permissions]
         }
     }
 }
@@ -1341,6 +1344,7 @@ struct MoreStage: View {
         case .power: PowerPage()
         case .routines: NavigationStack { RoutineList() }.tint(Tone.ember)
         case .shortcuts: NavigationStack { ShortcutEditorPage() }.tint(Tone.ember)
+        case .island: IslandPage()
         }
     }
 }

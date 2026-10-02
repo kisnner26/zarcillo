@@ -42,6 +42,8 @@
 	<string>El reloj puede agarrar tu última foto para lanzarla al Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>La transcripción se hace en el propio iPhone, sin internet.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Zarcillo te avisa si alguien toca tu Mac.</string>
 	<key>UIBackgroundModes</key>

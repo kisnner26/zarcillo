@@ -420,6 +420,7 @@ final class Remote: ObservableObject {
             connectTimeout?.cancel()
             codeError = nil
             phase = .connected(mac)
+            LiveIsland.update(mac: mac, np: nowPlaying)
             UserDefaults.standard.set(mac, forKey: "lastMac")
             send(.hello(device: UIDevice.current.name))
             send(.syncRoutines(routines))
@@ -448,6 +449,7 @@ final class Remote: ObservableObject {
     private func lost() {
         // Con el guardián activo, perder al Mac también es una alarma.
         if guardianOn { raise("perdí la conexión con el Mac") }
+        LiveIsland.end()
         channel?.cancel()
         channel = nil
         guard let t = target else { found(macs); return }
@@ -506,12 +508,14 @@ final class Remote: ObservableObject {
             if np?.trackID != nowPlaying?.trackID { artwork = nil; palette = nil }
             nowPlaying = np
             nowPlayingAt = Date()
+            if case .connected(let mac) = phase { LiveIsland.update(mac: mac, np: np, art: artwork, palette: palette) }
         case .artwork(let id, let data):
             if id == nowPlaying?.trackID, let img = UIImage(data: data) {
                 withAnimation(.smooth(duration: 0.8)) {
                     artwork = img
                     palette = ArtPalette.from(img)
                 }
+                if case .connected(let mac) = phase { LiveIsland.update(mac: mac, np: nowPlaying, art: img, palette: palette) }
             }
         case .frame(let data):
             frame = UIImage(data: data)
