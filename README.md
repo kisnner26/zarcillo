@@ -4,6 +4,14 @@
 
 tu iPhone como control remoto del Mac. el zarcillo es la parte de la planta que se estira y se agarra a otra: eso hace el teléfono con la computadora.
 
+<p align="center">
+  <img src="docs/img/apps.jpg" width="19%" alt="pestaña apps: el Dock del Mac como enredadera y escenas debajo">
+  <img src="docs/img/musica.jpg" width="19%" alt="pestaña música: carátula, barra y controles">
+  <img src="docs/img/pantalla.jpg" width="19%" alt="pestaña pantalla: el Mac en vivo en el iPhone">
+  <img src="docs/img/mas.jpg" width="19%" alt="pestaña más: mando, mezclador, láser, gestos, energía y brillo">
+  <img src="docs/img/botones.jpg" width="19%" alt="pestaña botones: los menús de la app activa en el Mac">
+</p>
+
 ## qué hace
 
 - **apps**: las apps de tu Dock con sus iconos reales; un toque la abre. mantenla pulsada para ver sus ventanas y saltar a una en concreto. arriba, tus **escenas**.
